@@ -117,7 +117,7 @@ func TestRegistrationClient_SuccessfulRegistration(t *testing.T) {
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
 
 	// Create registration client
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -169,7 +169,7 @@ func TestRegistrationClient_RegistrationRejected(t *testing.T) {
 	defer cleanup()
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -208,7 +208,7 @@ func TestRegistrationClient_HeartbeatFailure(t *testing.T) {
 	defer cleanup()
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -250,7 +250,7 @@ func TestRegistrationClient_CapacityReporting(t *testing.T) {
 	defer cleanup()
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -300,7 +300,7 @@ func TestRegistrationClient_WorkerStatus(t *testing.T) {
 	defer cleanup()
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -339,7 +339,7 @@ func TestRegistrationClient_WorkerStatus(t *testing.T) {
 func TestRegistrationClient_ConnectionFailure(t *testing.T) {
 	// Try to connect to a port that's not listening
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: "localhost:9999",
 		Version:         "0.1.0",
@@ -373,7 +373,7 @@ func TestRegistrationClient_ValidatesWorkerID(t *testing.T) {
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
 	expectedID := "test-worker-123"
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        expectedID,
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -412,7 +412,7 @@ func TestRegistrationClient_SendsCapabilities(t *testing.T) {
 	defer cleanup()
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -465,7 +465,7 @@ func TestRegistrationClient_DeregistrationValidation(t *testing.T) {
 	defer cleanup()
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -497,7 +497,7 @@ func TestRegistrationClient_DeregistrationValidation(t *testing.T) {
 
 func TestRegistrationClient_StopWithoutStart(t *testing.T) {
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: "localhost:9999",
 		Version:         "0.1.0",
@@ -541,7 +541,7 @@ func TestRegistrationClient_ReconnectionSuccess(t *testing.T) {
 	lis.Close()
 
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
@@ -580,7 +580,7 @@ func BenchmarkRegistrationClient_Heartbeat(b *testing.B) {
 	defer cleanup()
 
 	sessionPool := NewSessionPool("test-worker", 5, b.TempDir())
-	client := NewRegistrationClient(RegistrationConfig{
+	client := NewRegistrationClient(&RegistrationConfig{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",

@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/grpc"
-
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
@@ -37,7 +35,7 @@ type WorkerServiceClient struct {
 	SessionMgmt protov1.SessionManagementClient
 	TaskExec    protov1.TaskExecutionClient
 	Artifacts   protov1.ArtifactServiceClient
-	conn        *grpc.ClientConn //nolint:unused // Reserved for future connection cleanup
+	// conn is reserved for future connection lifecycle management
 }
 
 // NewWorkerRegistry creates a new worker registry

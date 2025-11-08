@@ -72,9 +72,14 @@ func main() {
 	// #nosec G115 - maxSessions is bounded by config validation (typically < 1000)
 	workerServer := worker.NewWorkerServer(workerID, int32(maxSessions), baseWorkspace)
 
+	// Construct worker's gRPC address
+	// TODO: Support configurable hostname (currently assumes localhost)
+	grpcAddress := fmt.Sprintf("localhost:%s", grpcPort)
+
 	// Create registration client
-	regClient := worker.NewRegistrationClient(worker.RegistrationConfig{
+	regClient := worker.NewRegistrationClient(&worker.RegistrationConfig{
 		WorkerID:        workerID,
+		GRPCAddress:     grpcAddress,
 		CoordinatorAddr: coordinatorAddr,
 		Version:         workerVersion,
 		SessionPool:     workerServer.GetSessionPool(),

@@ -11,6 +11,9 @@ help: ## Show this help message
 install: ## Install dependencies
 	@echo "Installing Go dependencies..."
 	@go mod download
+	@echo "Installing protoc plugins..."
+	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
 
 proto: ## Generate Go code from protobuf definitions
 	@./scripts/gen/generate-proto.sh
@@ -39,7 +42,12 @@ test: ## Run all tests
 
 test-unit: ## Run unit tests with coverage for SonarQube
 	@echo "Running unit tests with coverage..."
-	@go test -coverprofile=coverage.out -covermode=atomic ./...
+	@go test -coverprofile=coverage.out -covermode=atomic \
+		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
+		./...
+	@echo "Filtering coverage data (excluding generated proto files and main.go)..."
+	@grep -v -E '(\.pb\.go|cmd/.*/main\.go):' coverage.out > coverage.filtered.out || true
+	@mv coverage.filtered.out coverage.out
 	@go tool cover -func=coverage.out | grep "^total:" || echo "No coverage data"
 	@echo "Coverage report generated: coverage.out"
 
@@ -56,11 +64,17 @@ test-race: ## Run tests with race detector
 		exit 0; \
 	fi
 
-coverage: ## Generate test coverage report
+coverage: ## Generate coverage report
 	@echo "Generating coverage report..."
-	@go test -coverprofile=coverage.out ./...
-	@go tool cover -func=coverage.out | grep "^total:" || echo "No coverage data"
-	@echo "Coverage report generated: coverage.out"
+	@go test -coverprofile=coverage.out -covermode=atomic \
+		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
+		./...
+	@echo "Filtering coverage data (excluding generated proto files and main.go)..."
+	@grep -v -E '(\.pb\.go|cmd/.*/main\.go):' coverage.out > coverage.filtered.out || true
+	@mv coverage.filtered.out coverage.out
+	@go tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+	@go tool cover -func=coverage.out | grep "^total:"
 
 lint: ## Run linters
 	@echo "Running go vet..."
@@ -68,7 +82,43 @@ lint: ## Run linters
 	@echo "Running go fmt..."
 	@go fmt ./...
 	@echo "Running golangci-lint..."
+	@golangci-lint run ./... || echo "Linter found issues (non-blocking)"
+
+lint-ci: ## Run linters for CI (strict mode)
+	@echo "Running go vet..."
+	@go vet ./...
+	@echo "Running go fmt..."
+	@test -z "$$(gofmt -l .)" || (echo "Go files need formatting:" && gofmt -l . && exit 1)
+	@echo "Running golangci-lint..."
 	@golangci-lint run ./...
+
+ci: ## Run full CI pipeline locally (install, build, test, lint)
+	@echo "=== Running Full CI Pipeline ==="
+	@echo ""
+	@echo "Step 1/4: Installing dependencies..."
+	@$(MAKE) install
+	@echo ""
+	@echo "Step 2/4: Building binaries..."
+	@$(MAKE) build
+	@echo ""
+	@echo "Step 3/4: Running tests with coverage..."
+	@$(MAKE) test-unit
+	@echo ""
+	@echo "Step 4/4: Running linters..."
+	@$(MAKE) lint-ci || echo "Linting completed with issues"
+	@echo ""
+	@echo "=== CI Pipeline Complete ==="
+	@echo "Build artifacts: bin/coordinator, bin/worker"
+	@echo "Coverage report: coverage.out"
+	@echo ""
+	@echo "To view coverage:"
+	@echo "  make coverage"
+	@echo ""
+	@echo "To run individual steps:"
+	@echo "  make install    - Install dependencies"
+	@echo "  make build      - Build binaries"
+	@echo "  make test-unit  - Run tests with coverage"
+	@echo "  make lint-ci    - Run strict linting"
 
 clean: ## Clean build artifacts
 	@rm -rf bin/

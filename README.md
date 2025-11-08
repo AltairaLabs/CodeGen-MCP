@@ -67,3 +67,90 @@ flowchart TB
     Router -->|Stream Results| MCP
     MCP --> Client
 ```
+
+---
+
+### 🛠️ Development
+
+#### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/AltairaLabs/codegen-mcp.git
+cd codegen-mcp
+
+# Run the full CI pipeline locally
+make ci
+```
+
+#### Available Make Targets
+
+```bash
+make help              # Show all available targets
+make install           # Install dependencies and protoc plugins
+make build             # Build coordinator and worker binaries
+make test              # Run all tests
+make test-unit         # Run tests with coverage (used in CI)
+make lint              # Run linters (development mode)
+make lint-ci           # Run linters in strict mode (used in CI)
+make coverage          # Generate coverage report
+make ci                # Run full CI pipeline locally
+make clean             # Clean build artifacts
+```
+
+#### CI Pipeline
+
+The GitHub Actions CI pipeline uses make targets for consistency:
+
+1. **Test Job**: `make install` → `make test-unit`
+2. **Lint Job**: `make install` → `make lint-ci`
+3. **Build Job**: `make install` → `make build`
+
+**To emulate the CI pipeline locally**, simply run:
+
+```bash
+make ci
+```
+
+This runs the same steps as CI:
+- Install dependencies
+- Build binaries
+- Run tests with coverage
+- Run linters in strict mode
+
+#### Prerequisites
+
+- **Go 1.25+**
+- **Protocol Buffers compiler** (`protoc`)
+- **golangci-lint** for linting
+
+#### Coverage
+
+Current test coverage: **~85%**
+
+```bash
+make coverage
+```
+
+View detailed coverage:
+```bash
+go tool cover -html=coverage.out
+```
+
+---
+
+### 📚 Documentation
+
+For detailed documentation, see:
+
+- **[docs/](./docs/)** - Complete documentation
+- **[docs/coordinator/](./docs/coordinator/)** - Coordinator documentation
+- **[docs/worker/](./docs/worker/)** - Worker documentation
+
+---
+
+### 📄 License
+
+Apache 2.0 - See [LICENSE](./LICENSE) for details
+
+Copyright © 2025 AltairaLabs.ai

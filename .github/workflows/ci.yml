@@ -31,22 +31,16 @@ jobs:
     - name: Install dependencies
       run: make install
     
-    - name: Run all tests with coverage
-      run: go test -coverprofile=coverage.out -covermode=atomic ./...
+    - name: Run tests with coverage
+      run: make test-unit
     
-    - name: Generate coverage report
+    - name: Generate coverage summary
       run: |
         go tool cover -func=coverage.out | tee coverage-summary.txt
         echo "### Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
         tail -1 coverage-summary.txt >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
-    
-    - name: Test coordinator package
-      run: go test -v ./internal/coordinator/... -count=1
-    
-    - name: Test worker package
-      run: go test -v ./internal/worker/... -count=1
     
     - name: Upload coverage artifact
       uses: actions/upload-artifact@v4
@@ -70,22 +64,14 @@ jobs:
       with:
         go-version: '1.25'
     
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v7
-      with:
-        version: v2.6.0
-        args: --issues-exit-code=0 --output.json.path=golangci-lint-report.json
-        only-new-issues: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Install golangci-lint
+      run: |
+        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.6.0
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
     
-    - name: Upload lint report
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: golangci-lint-report
-        path: golangci-lint-report.json
-        retention-days: 5
+    - name: Run linters
+      run: make lint-ci
+      continue-on-error: true
   
   build:
     name: Build
@@ -104,14 +90,10 @@ jobs:
         sudo apt-get install -y protobuf-compiler
         protoc --version
     
-    - name: Install Go protoc plugins
+    - name: Install dependencies and build
       run: |
-        go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-        go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-        echo "$HOME/go/bin" >> $GITHUB_PATH
-    
-    - name: Build all components
-      run: make build
+        make install
+        make build
     
     - name: Test coordinator binary
       run: ./bin/coordinator --version

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
@@ -68,16 +69,49 @@ func (cs *CoordinatorServer) RegisterWorker(
 		}
 	}
 
-	// Create gRPC clients for this worker (connection will be established later)
-	// For now, we'll create placeholder clients - actual connection happens when needed
+	// Create gRPC clients for this worker if grpc_address is provided
 	sessionID := fmt.Sprintf("reg-%s-%d", req.WorkerId, time.Now().UnixNano())
 	const defaultHeartbeatInterval = 30 * time.Second
 	heartbeatInterval := defaultHeartbeatInterval
+
+	var workerClient WorkerServiceClient
+	if req.GrpcAddress != "" {
+		// Establish gRPC connection to worker
+		conn, err := grpc.NewClient(
+			req.GrpcAddress,
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+		)
+		if err != nil {
+			cs.logger.Error("Failed to create gRPC client for worker",
+				"worker_id", req.WorkerId,
+				"grpc_address", req.GrpcAddress,
+				"error", err)
+			return &protov1.RegisterResponse{
+				Accepted: false,
+				Reason:   fmt.Sprintf("failed to connect to worker: %v", err),
+			}, nil
+		}
+
+		// Create service clients
+		workerClient = WorkerServiceClient{
+			SessionMgmt: protov1.NewSessionManagementClient(conn),
+			TaskExec:    protov1.NewTaskExecutionClient(conn),
+			Artifacts:   protov1.NewArtifactServiceClient(conn),
+		}
+
+		cs.logger.Info("Created gRPC clients for worker",
+			"worker_id", req.WorkerId,
+			"grpc_address", req.GrpcAddress)
+	} else {
+		cs.logger.Warn("Worker registered without grpc_address - task routing will not work",
+			"worker_id", req.WorkerId)
+	}
 
 	// Register the worker
 	worker := &RegisteredWorker{
 		WorkerID:          req.WorkerId,
 		SessionID:         sessionID,
+		Client:            workerClient,
 		Capabilities:      req.Capabilities,
 		Limits:            req.Limits,
 		Status:            nil, // Will be updated on first heartbeat

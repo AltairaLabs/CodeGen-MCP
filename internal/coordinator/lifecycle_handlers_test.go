@@ -40,8 +40,8 @@ func TestRegisterWorker_Success(t *testing.T) {
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	req := &protov1.RegisterRequest{
-		WorkerId:    "test-worker",
-		Version:     "1.0.0",
+		WorkerId: "test-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},
@@ -104,8 +104,8 @@ func TestRegisterWorker_Reregistration(t *testing.T) {
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	req := &protov1.RegisterRequest{
-		WorkerId:    "test-worker",
-		Version:     "1.0.0",
+		WorkerId: "test-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},
@@ -143,8 +143,8 @@ func TestHeartbeat_Success(t *testing.T) {
 
 	// Register worker first
 	regReq := &protov1.RegisterRequest{
-		WorkerId:    "test-worker",
-		Version:     "1.0.0",
+		WorkerId: "test-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},
@@ -204,8 +204,8 @@ func TestHeartbeat_InvalidSessionID(t *testing.T) {
 
 	// Register worker
 	regReq := &protov1.RegisterRequest{
-		WorkerId:    "test-worker",
-		Version:     "1.0.0",
+		WorkerId: "test-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},
@@ -242,8 +242,8 @@ func TestDeregisterWorker_Success(t *testing.T) {
 
 	// Register worker
 	regReq := &protov1.RegisterRequest{
-		WorkerId:    "test-worker",
-		Version:     "1.0.0",
+		WorkerId: "test-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},
@@ -301,8 +301,8 @@ func TestDeregisterWorker_InvalidSessionID(t *testing.T) {
 
 	// Register worker
 	regReq := &protov1.RegisterRequest{
-		WorkerId:    "test-worker",
-		Version:     "1.0.0",
+		WorkerId: "test-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},
@@ -342,8 +342,8 @@ func TestStartCleanupLoop(t *testing.T) {
 
 	// Register a worker
 	regReq := &protov1.RegisterRequest{
-		WorkerId:    "stale-worker",
-		Version:     "1.0.0",
+		WorkerId: "stale-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},
@@ -395,8 +395,8 @@ func TestHeartbeat_WithCapacityInfo(t *testing.T) {
 
 	// Register worker
 	regReq := &protov1.RegisterRequest{
-		WorkerId:    "test-worker",
-		Version:     "1.0.0",
+		WorkerId: "test-worker",
+		Version:  "1.0.0",
 		Capabilities: &protov1.WorkerCapabilities{
 			MaxSessions: 10,
 		},

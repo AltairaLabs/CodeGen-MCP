@@ -16,6 +16,7 @@ import (
 // RegistrationClient handles worker registration and lifecycle with the coordinator
 type RegistrationClient struct {
 	workerID        string
+	grpcAddress     string // Worker's own gRPC address (for coordinator to connect back)
 	coordinatorAddr string
 	version         string
 	sessionPool     *SessionPool
@@ -41,6 +42,7 @@ type RegistrationClient struct {
 // RegistrationConfig holds configuration for the registration client
 type RegistrationConfig struct {
 	WorkerID        string
+	GRPCAddress     string // Worker's gRPC address (e.g., "localhost:50051")
 	CoordinatorAddr string
 	Version         string
 	SessionPool     *SessionPool
@@ -48,7 +50,7 @@ type RegistrationConfig struct {
 }
 
 // NewRegistrationClient creates a new registration client
-func NewRegistrationClient(cfg RegistrationConfig) *RegistrationClient {
+func NewRegistrationClient(cfg *RegistrationConfig) *RegistrationClient {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
@@ -60,6 +62,7 @@ func NewRegistrationClient(cfg RegistrationConfig) *RegistrationClient {
 
 	return &RegistrationClient{
 		workerID:           cfg.WorkerID,
+		grpcAddress:        cfg.GRPCAddress,
 		coordinatorAddr:    cfg.CoordinatorAddr,
 		version:            cfg.Version,
 		sessionPool:        cfg.SessionPool,
@@ -180,7 +183,8 @@ func (rc *RegistrationClient) connectAndRegister(ctx context.Context) error {
 			MaxMemoryPerSession: memoryPerSessionGB * bytesInGB,
 			MaxDiskPerSession:   diskPerSessionGB * bytesInGB,
 		},
-		Version: rc.version,
+		Version:     rc.version,
+		GrpcAddress: rc.grpcAddress,
 	}
 
 	// Register with coordinator
