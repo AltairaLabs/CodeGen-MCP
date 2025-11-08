@@ -7,9 +7,10 @@ import (
 	"math"
 	"time"
 
-	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
 // RegistrationClient handles worker registration and lifecycle with the coordinator

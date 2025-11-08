@@ -12,8 +12,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
 	"google.golang.org/grpc"
+
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
 )
 
 const (
@@ -61,8 +62,8 @@ func main() {
 
 	// Initialize components
 	workerRegistry := coordinator.NewWorkerRegistry()
-	sessionManager := coordinator.NewSessionManager()
-	workerClient := coordinator.NewMockWorkerClient()
+	sessionManager := coordinator.NewSessionManager(workerRegistry)
+	workerClient := coordinator.NewRealWorkerClient(workerRegistry, sessionManager, logger)
 	auditLogger := coordinator.NewAuditLogger(logger)
 
 	// Configure MCP server

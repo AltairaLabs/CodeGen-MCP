@@ -24,6 +24,7 @@ message RegisterRequest {
   WorkerCapabilities capabilities = 3;
   ResourceLimits limits = 4;
   string version = 5;             // Worker binary version
+  string grpc_address = 6;        // Worker's gRPC server address (e.g., "localhost:50051")
 }
 
 message WorkerCapabilities {

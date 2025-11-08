@@ -20,7 +20,233 @@ Complete API documentation for the CodeGen-MCP Worker component.
 
 ## gRPC Services
 
-The Worker exposes three main gRPC services defined in `api/proto/v1/worker.proto`.
+The Worker exposes three main gRPC services defined in `api/proto/v1/*.proto`.
+
+### WorkerLifecycle Client
+
+Workers implement a **client** for the `WorkerLifecycle` gRPC service to register with the coordinator.
+
+#### Registration Flow
+
+Workers register with the coordinator at startup and maintain the connection through heartbeats.
+
+**Registration Client Initialization:**
+
+```go
+import (
+    protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+    "google.golang.org/grpc"
+)
+
+// Connect to coordinator
+conn, err := grpc.Dial(coordinatorAddr, grpc.WithInsecure())
+if err != nil {
+    log.Fatal(err)
+}
+defer conn.Close()
+
+client := protov1.NewWorkerLifecycleClient(conn)
+
+// Create registration client
+regClient := worker.NewRegistrationClient(
+    client,
+    workerID,
+    maxSessions,
+    sessionPool,
+    logger,
+)
+
+// Start registration and heartbeat loop
+ctx := context.Background()
+if err := regClient.Register(ctx); err != nil {
+    log.Fatal(err)
+}
+```
+
+#### RegisterWorker
+
+Registers the worker with the coordinator at startup.
+
+**Request:**
+
+```protobuf
+message RegisterRequest {
+  string worker_id = 1;          // Unique worker identifier
+  int32 max_sessions = 2;        // Maximum concurrent sessions
+  map<string, string> metadata = 3;  // Worker metadata
+  string grpc_address = 6;       // Worker's gRPC address (planned)
+}
+```
+
+**Response:**
+
+```protobuf
+message RegisterResponse {
+  bool success = 1;              // Registration succeeded
+  string message = 2;            // Status message
+  int32 heartbeat_interval_seconds = 3;  // Required heartbeat interval
+}
+```
+
+**Example:**
+
+```go
+func (rc *RegistrationClient) Register(ctx context.Context) error {
+    resp, err := rc.client.RegisterWorker(ctx, &protov1.RegisterRequest{
+        WorkerId:    rc.workerID,
+        MaxSessions: rc.maxSessions,
+        Metadata: map[string]string{
+            "version": "0.1.0",
+            "region":  "us-west-2",
+        },
+    })
+    if err != nil {
+        return fmt.Errorf("registration failed: %w", err)
+    }
+    
+    rc.logger.Info("Registered with coordinator",
+        "heartbeat_interval", resp.HeartbeatIntervalSeconds)
+    
+    // Start heartbeat loop
+    go rc.heartbeatLoop(ctx, resp.HeartbeatIntervalSeconds)
+    
+    return nil
+}
+```
+
+#### Heartbeat Loop
+
+Workers send periodic heartbeats to maintain registration.
+
+**Request:**
+
+```protobuf
+message HeartbeatRequest {
+  string worker_id = 1;              // Worker identifier
+  int32 active_sessions = 2;         // Current session count
+  repeated string session_ids = 3;   // Active session IDs
+}
+```
+
+**Response:**
+
+```protobuf
+message HeartbeatResponse {
+  bool acknowledged = 1;         // Heartbeat received
+  string message = 2;            // Status message
+}
+```
+
+**Example:**
+
+```go
+func (rc *RegistrationClient) heartbeatLoop(ctx context.Context, intervalSeconds int32) {
+    ticker := time.NewTicker(time.Duration(intervalSeconds) * time.Second)
+    defer ticker.Stop()
+    
+    for {
+        select {
+        case <-ctx.Done():
+            return
+        case <-ticker.C:
+            // Get current session count from pool
+            activeSessions, sessionIDs := rc.sessionPool.GetActiveSessions()
+            
+            resp, err := rc.client.Heartbeat(ctx, &protov1.HeartbeatRequest{
+                WorkerId:       rc.workerID,
+                ActiveSessions: int32(activeSessions),
+                SessionIds:     sessionIDs,
+            })
+            if err != nil {
+                rc.logger.Error("Heartbeat failed", "error", err)
+                continue
+            }
+            
+            rc.logger.Debug("Heartbeat sent",
+                "active_sessions", activeSessions,
+                "acknowledged", resp.Acknowledged)
+        }
+    }
+}
+```
+
+#### DeregisterWorker
+
+Workers deregister gracefully on shutdown.
+
+**Request:**
+
+```protobuf
+message DeregisterRequest {
+  string worker_id = 1;              // Worker to deregister
+  repeated string session_ids = 2;   // Sessions to destroy
+}
+```
+
+**Response:**
+
+```protobuf
+message DeregisterResponse {
+  bool success = 1;              // Deregistration succeeded
+  string message = 2;            // Status message
+}
+```
+
+**Example:**
+
+```go
+func (rc *RegistrationClient) Deregister(ctx context.Context) error {
+    // Get all active session IDs
+    _, sessionIDs := rc.sessionPool.GetActiveSessions()
+    
+    resp, err := rc.client.DeregisterWorker(ctx, &protov1.DeregisterRequest{
+        WorkerId:   rc.workerID,
+        SessionIds: sessionIDs,
+    })
+    if err != nil {
+        return fmt.Errorf("deregistration failed: %w", err)
+    }
+    
+    rc.logger.Info("Deregistered from coordinator",
+        "success", resp.Success,
+        "message", resp.Message)
+    
+    return nil
+}
+```
+
+#### Graceful Shutdown
+
+Workers deregister and clean up resources on shutdown signals.
+
+**Example:**
+
+```go
+func main() {
+    // ... initialize worker, session pool, registration client ...
+    
+    // Setup signal handling
+    sigChan := make(chan os.Signal, 1)
+    signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+    
+    // Wait for shutdown signal
+    <-sigChan
+    logger.Info("Shutdown signal received, deregistering...")
+    
+    // Deregister from coordinator
+    ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+    defer cancel()
+    
+    if err := regClient.Deregister(ctx); err != nil {
+        logger.Error("Failed to deregister", "error", err)
+    }
+    
+    // Stop gRPC server
+    grpcServer.GracefulStop()
+    
+    logger.Info("Worker shutdown complete")
+}
+```
 
 ### SessionManagement Service
 

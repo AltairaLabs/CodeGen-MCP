@@ -82,7 +82,8 @@ type RegisterRequest struct {
 	AuthToken     string                 `protobuf:"bytes,2,opt,name=auth_token,json=authToken,proto3" json:"auth_token,omitempty"` // Bearer token for authentication
 	Capabilities  *WorkerCapabilities    `protobuf:"bytes,3,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
 	Limits        *ResourceLimits        `protobuf:"bytes,4,opt,name=limits,proto3" json:"limits,omitempty"`
-	Version       string                 `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"` // Worker binary version
+	Version       string                 `protobuf:"bytes,5,opt,name=version,proto3" json:"version,omitempty"`                            // Worker binary version
+	GrpcAddress   string                 `protobuf:"bytes,6,opt,name=grpc_address,json=grpcAddress,proto3" json:"grpc_address,omitempty"` // Worker's gRPC server address (e.g., "localhost:50051")
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -148,6 +149,13 @@ func (x *RegisterRequest) GetLimits() *ResourceLimits {
 func (x *RegisterRequest) GetVersion() string {
 	if x != nil {
 		return x.Version
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetGrpcAddress() string {
+	if x != nil {
+		return x.GrpcAddress
 	}
 	return ""
 }
@@ -661,14 +669,15 @@ var File_api_proto_v1_worker_lifecycle_proto protoreflect.FileDescriptor
 const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"\n" +
 	"#api/proto/v1/worker_lifecycle.proto\x12\n" +
-	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\xdf\x01\n" +
+	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\x82\x02\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1d\n" +
 	"\n" +
 	"auth_token\x18\x02 \x01(\tR\tauthToken\x12B\n" +
 	"\fcapabilities\x18\x03 \x01(\v2\x1e.codegen.v1.WorkerCapabilitiesR\fcapabilities\x122\n" +
 	"\x06limits\x18\x04 \x01(\v2\x1a.codegen.v1.ResourceLimitsR\x06limits\x12\x18\n" +
-	"\aversion\x18\x05 \x01(\tR\aversion\"\x85\x02\n" +
+	"\aversion\x18\x05 \x01(\tR\aversion\x12!\n" +
+	"\fgrpc_address\x18\x06 \x01(\tR\vgrpcAddress\"\x85\x02\n" +
 	"\x12WorkerCapabilities\x12'\n" +
 	"\x0fsupported_tools\x18\x01 \x03(\tR\x0esupportedTools\x12\x1c\n" +
 	"\tlanguages\x18\x02 \x03(\tR\tlanguages\x12!\n" +

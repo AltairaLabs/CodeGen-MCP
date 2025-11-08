@@ -44,11 +44,19 @@ cd codegen-mcp
 # Build the worker
 make build-worker
 
-# Run locally (defaults to port 50052)
-./bin/worker
+# Start coordinator first (in separate terminal)
+./bin/coordinator
+
+# Run worker (registers with coordinator at localhost:50050)
+COORDINATOR_ADDR=localhost:50050 WORKER_ID=worker-1 ./bin/worker
 
 # Run with custom configuration
-./bin/worker --port 50053 --max-sessions 10 --workspace /tmp/worker-workspace
+COORDINATOR_ADDR=coordinator:50050 \
+WORKER_ID=worker-2 \
+GRPC_PORT=50053 \
+MAX_SESSIONS=10 \
+BASE_WORKSPACE=/tmp/worker-workspace \
+./bin/worker
 ```
 
 ### Docker
@@ -82,9 +90,13 @@ kubectl scale deployment worker --replicas=5
 
 ```mermaid
 graph TB
-    COORD[Coordinator] -->|gRPC| WORKER[Worker Server]
+    COORD[Coordinator] -->|ExecuteTask gRPC| WORKER[Worker Server]
     
     subgraph "Worker Process"
+        REG_CLIENT[Registration Client] -->|RegisterWorker| COORD
+        REG_CLIENT -->|Heartbeat 30s| COORD
+        REG_CLIENT -->|DeregisterWorker| COORD
+        
         WORKER --> SESSION_POOL[Session Pool]
         WORKER --> TASK_EXEC[Task Executor]
         WORKER --> CHECKPOINT[Checkpointer]
@@ -104,6 +116,7 @@ graph TB
     style WORKER fill:#4A90E2
     style SESSION_POOL fill:#7ED321
     style TASK_EXEC fill:#F5A623
+    style REG_CLIENT fill:#BD10E0
 ```
 
 ## Core Features
@@ -213,11 +226,12 @@ Testing strategies and coverage:
 
 ### Current Version: v0.1.0
 
-**Test Coverage:** 83.9% (target: 90%)
+**Test Coverage:** 81.6% (target: 90%)
 
 | Component | Coverage |
 |-----------|----------|
 | server.go | 100% ✅ |
+| lifecycle_handlers.go | 100% ✅ |
 | session_pool.go | 87.5% |
 | task_executor.go | 85.3% |
 | tool_handlers.go | 86.2% |
@@ -228,6 +242,10 @@ Testing strategies and coverage:
 ### Implemented Features
 
 - ✅ gRPC server with streaming support
+- ✅ **Worker registration client**
+- ✅ **Automatic registration with coordinator at startup**
+- ✅ **Heartbeat loop (30 second interval)**
+- ✅ **Graceful deregistration on shutdown**
 - ✅ Multi-tenant session pool
 - ✅ Six core tools (echo, fs.*, run.python, pkg.install)
 - ✅ Task execution with cancellation
@@ -239,6 +257,7 @@ Testing strategies and coverage:
 
 ### Planned Features
 
+- ⏳ Worker gRPC address advertisement during registration
 - ⏳ Resource limit enforcement (CPU, memory)
 - ⏳ Kubernetes Job integration
 - ⏳ S3/cloud storage for checkpoints
@@ -254,6 +273,7 @@ Testing strategies and coverage:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `COORDINATOR_ADDR` | `localhost:50050` | Coordinator gRPC address for registration |
 | `WORKER_ID` | `worker-1` | Unique worker identifier |
 | `GRPC_PORT` | `50052` | gRPC server port |
 | `MAX_SESSIONS` | `5` | Maximum concurrent sessions |
@@ -261,6 +281,7 @@ Testing strategies and coverage:
 | `LOG_LEVEL` | `info` | Logging level (debug, info, warn, error) |
 | `CHECKPOINT_DIR` | `<workspace>/.checkpoints` | Checkpoint storage directory |
 | `MAX_CHECKPOINTS` | `10` | Checkpoints to keep per session |
+| `HEARTBEAT_INTERVAL` | `30s` | Heartbeat interval (set by coordinator) |
 
 ### Command-Line Flags
 

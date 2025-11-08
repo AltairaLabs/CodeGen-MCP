@@ -6,8 +6,9 @@ import (
 	"log/slog"
 	"time"
 
-	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"google.golang.org/grpc"
+
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
 // CoordinatorServer implements the gRPC services for the coordinator

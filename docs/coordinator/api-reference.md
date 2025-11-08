@@ -12,6 +12,8 @@ Complete reference for the Coordinator's internal APIs, types, and interfaces.
 - [MCP Server](#mcp-server)
 - [Session Manager](#session-manager)
 - [Worker Client](#worker-client)
+- [Worker Lifecycle](#worker-lifecycle)
+- [Worker Registry](#worker-registry)
 - [Audit Logger](#audit-logger)
 - [Types](#types)
 
@@ -283,6 +285,456 @@ mockWorker := coordinator.NewMockWorkerClient()
 // Use in tests or local development
 ```
 
+### `NewRealWorkerClient`
+
+Creates a production worker client that routes tasks to registered workers via gRPC.
+
+```go
+func NewRealWorkerClient(registry *WorkerRegistry, sessionMgr *SessionManager) *RealWorkerClient
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `registry` | `*WorkerRegistry` | Registry of available workers |
+| `sessionMgr` | `*SessionManager` | Session manager for session-to-worker affinity |
+
+**Returns:** Configured `*RealWorkerClient` that routes tasks to workers
+
+**Example:**
+
+```go
+registry := coordinator.NewWorkerRegistry()
+sessionMgr := coordinator.NewSessionManager()
+workerClient := coordinator.NewRealWorkerClient(registry, sessionMgr)
+```
+
+**Behavior:**
+
+- Routes tasks to the worker assigned to the session
+- Establishes gRPC connection to worker's TaskExecution service
+- Streams task execution with real-time logs and progress
+- Handles connection errors and worker unavailability
+- Returns aggregated task results
+
+## Worker Lifecycle
+
+The Coordinator implements the `WorkerLifecycleServer` gRPC service to manage worker registration, heartbeats, and deregistration.
+
+### Service Definition
+
+```protobuf
+service WorkerLifecycle {
+  rpc RegisterWorker(RegisterRequest) returns (RegisterResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc DeregisterWorker(DeregisterRequest) returns (DeregisterResponse);
+}
+```
+
+### `RegisterWorker`
+
+Registers a new worker with the coordinator.
+
+```go
+func (cs *CoordinatorServer) RegisterWorker(ctx context.Context, 
+    req *protov1.RegisterRequest) (*protov1.RegisterResponse, error)
+```
+
+**Request:**
+
+```protobuf
+message RegisterRequest {
+  string worker_id = 1;          // Unique worker identifier
+  int32 max_sessions = 2;        // Maximum concurrent sessions
+  map<string, string> metadata = 3;  // Worker metadata (region, zone, etc.)
+  string grpc_address = 6;       // Worker's gRPC address (planned)
+}
+```
+
+**Response:**
+
+```protobuf
+message RegisterResponse {
+  bool success = 1;              // Registration succeeded
+  string message = 2;            // Status message
+  int32 heartbeat_interval_seconds = 3;  // Required heartbeat interval (30s)
+}
+```
+
+**Example:**
+
+```go
+resp, err := client.RegisterWorker(ctx, &protov1.RegisterRequest{
+    WorkerId:   "worker-1",
+    MaxSessions: 5,
+    Metadata: map[string]string{
+        "region": "us-west-2",
+        "zone":   "us-west-2a",
+    },
+})
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Printf("Registered, heartbeat every %ds\n", resp.HeartbeatIntervalSeconds)
+```
+
+**Behavior:**
+
+- Validates worker_id is not empty
+- Allows re-registration (updates existing worker)
+- Initializes worker with zero active sessions
+- Sets last_heartbeat to current time
+- Returns 30-second heartbeat interval
+
+### `Heartbeat`
+
+Updates worker's last activity timestamp and active session count.
+
+```go
+func (cs *CoordinatorServer) Heartbeat(ctx context.Context, 
+    req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error)
+```
+
+**Request:**
+
+```protobuf
+message HeartbeatRequest {
+  string worker_id = 1;              // Worker identifier
+  int32 active_sessions = 2;         // Current session count
+  repeated string session_ids = 3;   // Active session IDs
+}
+```
+
+**Response:**
+
+```protobuf
+message HeartbeatResponse {
+  bool acknowledged = 1;         // Heartbeat received
+  string message = 2;            // Status message
+}
+```
+
+**Example:**
+
+```go
+resp, err := client.Heartbeat(ctx, &protov1.HeartbeatRequest{
+    WorkerId:       "worker-1",
+    ActiveSessions: 3,
+    SessionIds:     []string{"sess-1", "sess-2", "sess-3"},
+})
+if err != nil {
+    log.Printf("Heartbeat failed: %v", err)
+}
+```
+
+**Behavior:**
+
+- Returns error if worker not registered
+- Updates worker's last_heartbeat timestamp
+- Updates worker's active_sessions count
+- Logs invalid session IDs (sessions not in SessionManager)
+- Used by cleanup loop to detect stale workers
+
+### `DeregisterWorker`
+
+Removes a worker from the registry.
+
+```go
+func (cs *CoordinatorServer) DeregisterWorker(ctx context.Context, 
+    req *protov1.DeregisterRequest) (*protov1.DeregisterResponse, error)
+```
+
+**Request:**
+
+```protobuf
+message DeregisterRequest {
+  string worker_id = 1;              // Worker to deregister
+  repeated string session_ids = 2;   // Sessions to destroy (optional)
+}
+```
+
+**Response:**
+
+```protobuf
+message DeregisterResponse {
+  bool success = 1;              // Deregistration succeeded
+  string message = 2;            // Status message
+}
+```
+
+**Example:**
+
+```go
+resp, err := client.DeregisterWorker(ctx, &protov1.DeregisterRequest{
+    WorkerId:   "worker-1",
+    SessionIds: []string{"sess-1", "sess-2"},
+})
+if err != nil {
+    log.Printf("Deregistration failed: %v", err)
+}
+```
+
+**Behavior:**
+
+- Returns error if worker not found
+- Removes worker from registry
+- Destroys specified sessions from SessionManager
+- Logs invalid session IDs
+- Used during graceful worker shutdown
+
+### `StartCleanupLoop`
+
+Starts a background goroutine that removes stale workers.
+
+```go
+func (cs *CoordinatorServer) StartCleanupLoop(ctx context.Context, interval time.Duration)
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `ctx` | `context.Context` | Context for cancellation |
+| `interval` | `time.Duration` | Cleanup check interval |
+
+**Example:**
+
+```go
+// Start cleanup loop that checks every minute
+// Removes workers with no heartbeat for 5 minutes
+ctx := context.Background()
+server.StartCleanupLoop(ctx, 1*time.Minute)
+```
+
+**Behavior:**
+
+- Runs in background goroutine
+- Wakes up every `interval` duration
+- Removes workers with no heartbeat for 5 minutes
+- Stops when context is cancelled
+- Logs each cleanup operation
+
+## Worker Registry
+
+Manages the pool of available workers and provides capacity-aware worker selection.
+
+### `NewWorkerRegistry`
+
+Creates a new worker registry with empty worker map.
+
+```go
+func NewWorkerRegistry() *WorkerRegistry
+```
+
+**Returns:** Initialized `*WorkerRegistry`
+
+**Example:**
+
+```go
+registry := coordinator.NewWorkerRegistry()
+```
+
+### `RegisterWorker`
+
+Adds or updates a worker in the registry.
+
+```go
+func (wr *WorkerRegistry) RegisterWorker(workerID string, maxSessions int32, 
+    metadata map[string]string) error
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `workerID` | `string` | Unique worker identifier |
+| `maxSessions` | `int32` | Maximum concurrent sessions |
+| `metadata` | `map[string]string` | Custom worker metadata |
+
+**Returns:** Error if workerID is empty
+
+**Example:**
+
+```go
+err := registry.RegisterWorker("worker-1", 5, map[string]string{
+    "region": "us-west-2",
+})
+```
+
+### `GetWorker`
+
+Retrieves a worker by ID.
+
+```go
+func (wr *WorkerRegistry) GetWorker(workerID string) (*RegisteredWorker, bool)
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `workerID` | `string` | Worker identifier to retrieve |
+
+**Returns:**
+
+- `*RegisteredWorker` - The worker if found
+- `bool` - true if worker exists, false otherwise
+
+**Example:**
+
+```go
+if worker, ok := registry.GetWorker("worker-1"); ok {
+    fmt.Printf("Worker has %d active sessions\n", worker.ActiveSessions)
+}
+```
+
+### `FindWorkerWithCapacity`
+
+Finds a worker with available session capacity.
+
+```go
+func (wr *WorkerRegistry) FindWorkerWithCapacity() (*RegisteredWorker, error)
+```
+
+**Returns:**
+
+- `*RegisteredWorker` - Worker with available capacity
+- `error` - Error if no workers available
+
+**Example:**
+
+```go
+worker, err := registry.FindWorkerWithCapacity()
+if err != nil {
+    log.Printf("No workers available: %v", err)
+    return
+}
+fmt.Printf("Selected worker: %s\n", worker.WorkerID)
+```
+
+**Behavior:**
+
+- Returns first worker where `ActiveSessions < MaxSessions`
+- Thread-safe with read lock
+- Returns error if no workers have capacity
+- Used by SessionManager when assigning workers to sessions
+
+### `UpdateHeartbeat`
+
+Updates a worker's last heartbeat and active session count.
+
+```go
+func (wr *WorkerRegistry) UpdateHeartbeat(workerID string, 
+    activeSessions int32) error
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `workerID` | `string` | Worker to update |
+| `activeSessions` | `int32` | Current active session count |
+
+**Returns:** Error if worker not found
+
+**Example:**
+
+```go
+err := registry.UpdateHeartbeat("worker-1", 3)
+if err != nil {
+    log.Printf("Heartbeat update failed: %v", err)
+}
+```
+
+### `DeregisterWorker`
+
+Removes a worker from the registry.
+
+```go
+func (wr *WorkerRegistry) DeregisterWorker(workerID string) error
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `workerID` | `string` | Worker to remove |
+
+**Returns:** Error if worker not found
+
+**Example:**
+
+```go
+err := registry.DeregisterWorker("worker-1")
+if err != nil {
+    log.Printf("Worker not found: %v", err)
+}
+```
+
+### `RemoveStaleWorkers`
+
+Removes workers that haven't sent heartbeat within timeout.
+
+```go
+func (wr *WorkerRegistry) RemoveStaleWorkers(timeout time.Duration) int
+```
+
+**Parameters:**
+
+| Name | Type | Description |
+|------|------|-------------|
+| `timeout` | `time.Duration` | Maximum time since last heartbeat |
+
+**Returns:** Number of workers removed
+
+**Example:**
+
+```go
+// Remove workers with no heartbeat for 5 minutes
+removed := registry.RemoveStaleWorkers(5 * time.Minute)
+log.Printf("Removed %d stale workers\n", removed)
+```
+
+### `ListWorkers`
+
+Returns a list of all registered workers.
+
+```go
+func (wr *WorkerRegistry) ListWorkers() []*RegisteredWorker
+```
+
+**Returns:** Slice of all registered workers
+
+**Example:**
+
+```go
+workers := registry.ListWorkers()
+for _, worker := range workers {
+    fmt.Printf("Worker %s: %d/%d sessions\n", 
+        worker.WorkerID, 
+        worker.ActiveSessions, 
+        worker.MaxSessions)
+}
+```
+
+### `WorkerCount`
+
+Returns the number of registered workers.
+
+```go
+func (wr *WorkerRegistry) WorkerCount() int
+```
+
+**Returns:** Count of registered workers
+
+**Example:**
+
+```go
+count := registry.WorkerCount()
+fmt.Printf("Total workers: %d\n", count)
+```
+
 ## Audit Logger
 
 ### `NewAuditLogger`
@@ -365,6 +817,30 @@ audit.LogToolResult(ctx, &coordinator.AuditEntry{
 ```
 
 ## Types
+
+### `RegisteredWorker`
+
+Represents a registered worker in the WorkerRegistry.
+
+```go
+type RegisteredWorker struct {
+    WorkerID       string
+    MaxSessions    int32
+    ActiveSessions int32
+    LastHeartbeat  time.Time
+    Metadata       map[string]string
+}
+```
+
+**Field Details:**
+
+| Field | Type | Description | Example |
+|-------|------|-------------|---------|
+| `WorkerID` | `string` | Unique worker identifier | `"worker-1"` |
+| `MaxSessions` | `int32` | Maximum concurrent sessions | `5` |
+| `ActiveSessions` | `int32` | Current active session count | `3` |
+| `LastHeartbeat` | `time.Time` | Last heartbeat timestamp | `2025-11-08T12:05:30Z` |
+| `Metadata` | `map[string]string` | Custom worker metadata | `{"region": "us-west-2"}` |
 
 ### `Config`
 
@@ -549,8 +1025,41 @@ All public APIs are thread-safe:
 - Worker client should implement connection pooling
 - No blocking operations in hot path (logging is async)
 
+## Worker Registration Flow
+
+### Typical Registration Sequence
+
+1. **Worker starts** and initializes gRPC server
+2. **Worker calls RegisterWorker** with worker_id, max_sessions, metadata
+3. **Coordinator responds** with heartbeat_interval_seconds (30s)
+4. **Worker starts heartbeat loop** sending heartbeat every 30s
+5. **Coordinator updates** worker's last_heartbeat and active_sessions
+6. **On shutdown, worker calls DeregisterWorker** with session_ids to destroy
+7. **Coordinator removes** worker from registry and cleans up sessions
+
+### Session Assignment Flow
+
+1. **Client calls CreateSession** on coordinator
+2. **SessionManager calls FindWorkerWithCapacity** on WorkerRegistry
+3. **Registry returns** worker with available capacity
+4. **SessionManager assigns** worker to session
+5. **SessionManager calls CreateSession** on worker via gRPC
+6. **Worker creates** isolated workspace and Python environment
+7. **Session is ready** for task execution
+
+### Task Routing Flow
+
+1. **Client calls tool** via MCP protocol
+2. **MCP Server calls ExecuteTask** on WorkerClient
+3. **RealWorkerClient looks up** session's assigned worker
+4. **RealWorkerClient establishes** gRPC connection to worker
+5. **Worker executes task** in session workspace
+6. **Worker streams** logs and progress back
+7. **RealWorkerClient aggregates** result and returns to MCP Server
+
 ## See Also
 
 - [Coordinator Architecture](./README.md) - High-level overview and diagrams
 - [Deployment Guide](./deployment.md) - Production deployment patterns
 - [Testing Guide](./testing.md) - How to test coordinator components
+- [Worker API Reference](../worker/api-reference.md) - Worker-side APIs

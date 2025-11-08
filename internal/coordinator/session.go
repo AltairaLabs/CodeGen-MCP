@@ -4,6 +4,8 @@ import (
 	"context"
 	"sync"
 	"time"
+
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
 // SessionManager manages MCP client sessions and workspace isolation
@@ -25,7 +27,7 @@ func NewSessionManager(workerRegistry ...*WorkerRegistry) *SessionManager {
 	return sm
 }
 
-// CreateSession creates a new session for an MCP client
+// CreateSession creates a new session for an MCP client and assigns a worker
 func (sm *SessionManager) CreateSession(ctx context.Context, sessionID, userID, workspaceID string) *Session {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
@@ -39,8 +41,50 @@ func (sm *SessionManager) CreateSession(ctx context.Context, sessionID, userID, 
 		Metadata:    make(map[string]string),
 	}
 
+	// If worker registry is available, try to assign a worker
+	if sm.workerRegistry != nil {
+		worker, err := sm.assignWorkerToSession(ctx, session)
+		if err == nil && worker != nil {
+			session.WorkerID = worker.WorkerID
+
+			// Create session on the worker
+			workerSessionID, err := sm.createWorkerSession(ctx, worker, session)
+			if err == nil {
+				session.WorkerSessionID = workerSessionID
+			}
+		}
+	}
+
 	sm.sessions[sessionID] = session
 	return session
+}
+
+// assignWorkerToSession selects a worker with available capacity
+func (sm *SessionManager) assignWorkerToSession(ctx context.Context, _ *Session) (*RegisteredWorker, error) {
+	// Use default session config for now
+	// In a real implementation, this could be customized per session
+	return sm.workerRegistry.FindWorkerWithCapacity(ctx, nil)
+}
+
+// createWorkerSession calls the worker's CreateSession RPC
+func (sm *SessionManager) createWorkerSession(
+	ctx context.Context,
+	worker *RegisteredWorker,
+	session *Session,
+) (string, error) {
+	// Import protov1 needed at package level
+	resp, err := worker.Client.SessionMgmt.CreateSession(ctx, &protov1.CreateSessionRequest{
+		WorkerId:    worker.WorkerID,
+		WorkspaceId: session.WorkspaceID,
+		UserId:      session.UserID,
+		Config:      &protov1.SessionConfig{},
+	})
+
+	if err != nil {
+		return "", err
+	}
+
+	return resp.SessionId, nil
 }
 
 // GetSession retrieves a session by ID

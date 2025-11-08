@@ -6,8 +6,9 @@ import (
 	"sync"
 	"time"
 
-	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"google.golang.org/grpc"
+
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
 // WorkerRegistry manages registered workers and their capacity

@@ -12,9 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"google.golang.org/grpc"
+
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"github.com/AltairaLabs/codegen-mcp/internal/worker"
-	"google.golang.org/grpc"
 )
 
 const (
