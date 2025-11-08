@@ -21,6 +21,8 @@ jobs:
     
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better SonarQube analysis
     
     - uses: actions/setup-go@v5
       with:
@@ -29,17 +31,15 @@ jobs:
     - name: Install dependencies
       run: make install
     
-    - name: Run tests
-      run: make test
+    - name: Run tests with coverage
+      run: go test -coverprofile=coverage.out -covermode=atomic ./...
     
-    - name: Generate coverage
-      run: make coverage
-    
-    - name: Upload coverage
+    - name: Upload coverage artifact
       uses: actions/upload-artifact@v4
       with:
-        name: coverage
+        name: coverage-report
         path: coverage.out
+        retention-days: 5
   
   lint:
     name: Lint
@@ -58,10 +58,18 @@ jobs:
       uses: golangci/golangci-lint-action@v7
       with:
         version: v2.6.0
-        args: --issues-exit-code=0
+        args: --issues-exit-code=0 --out-format=json:golangci-lint-report.json,colored-line-number
         only-new-issues: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Upload lint report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: golangci-lint-report
+        path: golangci-lint-report.json
+        retention-days: 5
   
   build:
     name: Build
@@ -91,23 +99,16 @@ jobs:
       with:
         fetch-depth: 0  # Shallow clones should be disabled for better analysis
     
-    - uses: actions/setup-go@v5
+    - name: Download coverage report
+      uses: actions/download-artifact@v4
       with:
-        go-version: '1.25'
+        name: coverage-report
     
-    - name: Install dependencies
-      run: make install
-    
-    - name: Run tests with coverage
-      run: go test -coverprofile=coverage.out -covermode=atomic ./...
-    
-    - name: Install golangci-lint
-      run: |
-        curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v2.6.0
-        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
-    
-    - name: Run golangci-lint with JSON output
-      run: golangci-lint run --out-format json > golangci-lint-report.json || true
+    - name: Download lint report
+      uses: actions/download-artifact@v4
+      with:
+        name: golangci-lint-report
+      continue-on-error: true
     
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@v3
