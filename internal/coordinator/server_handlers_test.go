@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+	"time"
 
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -432,5 +434,156 @@ func TestGetSessionID(t *testing.T) {
 				t.Errorf("Expected session ID %s, got %s", tt.expectedID, sessionID)
 			}
 		})
+	}
+}
+
+func TestGetOrCreateSession_NewSession(t *testing.T) {
+	registry := NewWorkerRegistry()
+	sm := NewSessionManager(registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	server := NewMCPServer(cfg, sm, worker, audit)
+
+	// Register a mock worker with capacity
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Client: WorkerServiceClient{
+			SessionMgmt: &mockSessionMgmtClient{},
+		},
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	_ = registry.RegisterWorker("test-worker", mockWorker)
+
+	ctx := context.WithValue(context.Background(), "session_id", "new-session")
+
+	// Should create a new session
+	session, err := server.getOrCreateSession(ctx)
+
+	if err != nil {
+		t.Fatalf("getOrCreateSession returned error: %v", err)
+	}
+
+	if session == nil {
+		t.Fatal("Expected non-nil session")
+	}
+
+	if session.ID != "new-session" {
+		t.Errorf("Expected session ID 'new-session', got %s", session.ID)
+	}
+
+	// Verify worker was assigned
+	if session.WorkerID == "" {
+		t.Error("Expected worker to be assigned to session")
+	}
+
+	// Verify session was added to manager
+	retrievedSession, ok := sm.GetSession("new-session")
+	if !ok {
+		t.Error("Session should be in session manager")
+	}
+
+	if retrievedSession.ID != session.ID {
+		t.Error("Retrieved session should match created session")
+	}
+}
+
+func TestGetOrCreateSession_ExistingSession(t *testing.T) {
+	registry := NewWorkerRegistry()
+	sm := NewSessionManager(registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	server := NewMCPServer(cfg, sm, worker, audit)
+
+	// Register a mock worker with capacity
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Client: WorkerServiceClient{
+			SessionMgmt: &mockSessionMgmtClient{},
+		},
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	_ = registry.RegisterWorker("test-worker", mockWorker)
+
+	// Pre-create a session
+	ctx := context.Background()
+	existingSession := sm.CreateSession(ctx, "existing-session", "user1", "workspace1")
+
+	// Now try to get it
+	ctx = context.WithValue(ctx, "session_id", "existing-session")
+	session, err := server.getOrCreateSession(ctx)
+
+	if err != nil {
+		t.Fatalf("getOrCreateSession returned error: %v", err)
+	}
+
+	if session.ID != existingSession.ID {
+		t.Error("Should return existing session")
+	}
+
+	// Verify session count didn't increase
+	if sm.SessionCount() != 1 {
+		t.Errorf("Expected 1 session, got %d", sm.SessionCount())
+	}
+}
+
+func TestGetOrCreateSession_NoWorkersAvailable(t *testing.T) {
+	// Create registry with NO workers
+	registry := NewWorkerRegistry()
+	sm := NewSessionManager(registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	server := NewMCPServer(cfg, sm, worker, audit)
+
+	ctx := context.WithValue(context.Background(), "session_id", "test-session")
+
+	// Should fail because no workers are registered
+	_, err := server.getOrCreateSession(ctx)
+
+	if err == nil {
+		t.Fatal("Expected error when no workers available")
+	}
+
+	expectedErr := "no workers available"
+	if err.Error() != expectedErr {
+		t.Errorf("Expected error %q, got %q", expectedErr, err.Error())
 	}
 }

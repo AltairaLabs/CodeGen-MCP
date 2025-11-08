@@ -59,12 +59,14 @@ func (te *TaskExecutor) handleFsWrite(ctx context.Context, session *WorkerSessio
 	fullPath := filepath.Join(session.WorkspacePath, path)
 
 	// Create parent directories
-	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
+	//nolint:gosec // G301: Workspace directories need 0755 for proper file operations
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return nil, fmt.Errorf("failed to create directories: %w", err)
 	}
 
 	// Write file
-	if err := os.WriteFile(fullPath, []byte(contents), 0644); err != nil { // NOSONAR - workspace files use 0644 for user read/write and group/other read
+	//nolint:gosec // G306: Workspace files use 0644 for user read/write and group/other read
+	if err := os.WriteFile(fullPath, []byte(contents), 0644); err != nil {
 		return nil, fmt.Errorf("failed to write file: %w", err)
 	}
 
@@ -95,7 +97,8 @@ func (te *TaskExecutor) handleFsRead(ctx context.Context, session *WorkerSession
 	fullPath := filepath.Join(session.WorkspacePath, path)
 
 	// Read file
-	data, err := os.ReadFile(fullPath) // NOSONAR - path is validated and constrained to session workspace
+	//nolint:gosec // G304: Path is validated and constrained to session workspace
+	data, err := os.ReadFile(fullPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -176,7 +179,8 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 
 	// Create temporary Python file
 	tmpFile := filepath.Join(session.WorkspacePath, fmt.Sprintf(".tmp_%d.py", time.Now().UnixNano()))
-	if err := os.WriteFile(tmpFile, []byte(code), 0644); err != nil { // NOSONAR - temporary Python files use 0644 for execution by Python interpreter
+	//nolint:gosec // G306: Temporary Python files use 0644 for execution by Python interpreter
+	if err := os.WriteFile(tmpFile, []byte(code), 0644); err != nil {
 		return &protov1.TaskResult{
 			Status: protov1.TaskResult_STATUS_FAILURE,
 			Outputs: map[string]string{
@@ -197,7 +201,8 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 		pythonCmd = venvPython
 	}
 
-	cmd := exec.CommandContext(ctx, pythonCmd, tmpFile) // NOSONAR - python command is either system python3 or session's venv, tmpFile is in isolated session workspace
+	//nolint:gosec // G204: python command is either system python3 or session's venv, tmpFile is in isolated session workspace
+	cmd := exec.CommandContext(ctx, pythonCmd, tmpFile)
 	cmd.Dir = session.WorkspacePath
 
 	// Set environment variables
@@ -330,7 +335,8 @@ func (te *TaskExecutor) handlePkgInstall(ctx context.Context, session *WorkerSes
 
 	// Build pip install command
 	args := append([]string{"install"}, pkgList...)
-	cmd := exec.CommandContext(ctx, pipCmd, args...) // NOSONAR - pip command is either system pip3 or session's venv, args are from validated requirements
+	//nolint:gosec // G204: pip command is either system pip3 or session's venv, args are from validated requirements
+	cmd := exec.CommandContext(ctx, pipCmd, args...)
 	cmd.Dir = session.WorkspacePath
 
 	var stdout, stderr bytes.Buffer

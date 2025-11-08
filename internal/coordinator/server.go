@@ -16,6 +16,9 @@ const (
 	toolEcho    = "echo"
 	toolFsRead  = "fs.read"
 	toolFsWrite = "fs.write"
+
+	// Error messages
+	errSessionError = "session error: %v"
 )
 
 // MCPServer wraps the mcp-go server with our business logic
@@ -99,12 +102,10 @@ func (ms *MCPServer) handleEcho(ctx context.Context, request mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// Get session from context
-	sessionID := ms.getSessionID(ctx)
-	session, ok := ms.sessionManager.GetSession(sessionID)
-	if !ok {
-		// Create default session if none exists
-		session = ms.sessionManager.CreateSession(ctx, sessionID, "default", "default")
+	// Get or create session
+	session, err := ms.getOrCreateSession(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
 	}
 
 	// Audit log
@@ -151,10 +152,10 @@ func (ms *MCPServer) handleFsRead(ctx context.Context, request mcp.CallToolReque
 		return mcp.NewToolResultError(vErr.Error()), nil
 	}
 
-	sessionID := ms.getSessionID(ctx)
-	session, ok := ms.sessionManager.GetSession(sessionID)
-	if !ok {
-		session = ms.sessionManager.CreateSession(ctx, sessionID, "default", "default")
+	// Get or create session
+	session, err := ms.getOrCreateSession(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
 	}
 
 	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
@@ -202,10 +203,10 @@ func (ms *MCPServer) handleFsWrite(ctx context.Context, request mcp.CallToolRequ
 		return mcp.NewToolResultError(vErr.Error()), nil
 	}
 
-	sessionID := ms.getSessionID(ctx)
-	session, ok := ms.sessionManager.GetSession(sessionID)
-	if !ok {
-		session = ms.sessionManager.CreateSession(ctx, sessionID, "default", "default")
+	// Get or create session
+	session, err := ms.getOrCreateSession(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
 	}
 
 	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
@@ -264,6 +265,25 @@ func (ms *MCPServer) getSessionID(ctx context.Context) string {
 		return "default-session"
 	}
 	return sessionID
+}
+
+// getOrCreateSession retrieves an existing session or creates a new one with worker assignment
+func (ms *MCPServer) getOrCreateSession(ctx context.Context) (*Session, error) {
+	sessionID := ms.getSessionID(ctx)
+	session, ok := ms.sessionManager.GetSession(sessionID)
+	if !ok {
+		// Create new session with worker assignment
+		session = ms.sessionManager.CreateSession(ctx, sessionID, "default-user", "default-workspace")
+		if session == nil {
+			return nil, fmt.Errorf("failed to create session")
+		}
+
+		// Verify worker was assigned
+		if session.WorkerID == "" {
+			return nil, fmt.Errorf("no workers available")
+		}
+	}
+	return session, nil
 }
 
 // Server returns the underlying mcp-go server for serving

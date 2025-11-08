@@ -118,7 +118,8 @@ func (c *Checkpointer) CreateCheckpoint(ctx context.Context, sessionID string, i
 		return "", fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	if err := os.WriteFile(metadataPath, metadataJSON, 0644); err != nil { // NOSONAR - checkpoint metadata is non-sensitive internal data
+	//nolint:gosec // G306: Checkpoint metadata is non-sensitive internal data
+	if err := os.WriteFile(metadataPath, metadataJSON, 0644); err != nil {
 		return "", fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -146,7 +147,8 @@ func (c *Checkpointer) Restore(ctx context.Context, req *protov1.RestoreRequest)
 	}
 
 	// Read metadata
-	metadataJSON, err := os.ReadFile(metadataPath) // NOSONAR - checkpoint path is validated and controlled by the system
+	//nolint:gosec // G304: Checkpoint path is validated and controlled by the system
+	metadataJSON, err := os.ReadFile(metadataPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read checkpoint metadata: %w", err)
 	}
@@ -178,7 +180,8 @@ func (c *Checkpointer) Restore(ctx context.Context, req *protov1.RestoreRequest)
 	if err := os.RemoveAll(workerSession.WorkspacePath); err != nil {
 		return nil, fmt.Errorf("failed to clear workspace: %w", err)
 	}
-	if err := os.MkdirAll(workerSession.WorkspacePath, 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
+	//nolint:gosec // G301: Workspace directories need 0755 for proper file operations
+	if err := os.MkdirAll(workerSession.WorkspacePath, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
 	}
 
@@ -200,7 +203,8 @@ func (c *Checkpointer) Restore(ctx context.Context, req *protov1.RestoreRequest)
 
 // createArchive creates a tar.gz archive of a directory
 func (c *Checkpointer) createArchive(sourceDir, targetPath string) error {
-	file, err := os.Create(targetPath) // NOSONAR - target path is controlled and validated by checkpoint system
+	//nolint:gosec // G304: Target path is controlled and validated by checkpoint system
+	file, err := os.Create(targetPath)
 	if err != nil {
 		return err
 	}
@@ -254,7 +258,8 @@ func (c *Checkpointer) createTarHeader(sourceDir, path string, info os.FileInfo)
 
 // copyFileToArchive copies a file's contents to the tar archive
 func (c *Checkpointer) copyFileToArchive(tarWriter *tar.Writer, path string) error {
-	file, err := os.Open(path) // NOSONAR - path is from controlled workspace directory
+	//nolint:gosec // G304: Path is from controlled workspace directory
+	file, err := os.Open(path)
 	if err != nil {
 		return err
 	}
@@ -291,7 +296,8 @@ func (c *Checkpointer) extractArchive(archivePath, targetDir string) error {
 
 // openArchiveReader opens and returns a tar reader for the archive
 func (c *Checkpointer) openArchiveReader(archivePath string) (*tar.Reader, func(), error) {
-	file, err := os.Open(archivePath) // NOSONAR - archive path is validated checkpoint file
+	//nolint:gosec // G304: Archive path is validated checkpoint file
+	file, err := os.Open(archivePath)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -346,27 +352,31 @@ func (c *Checkpointer) extractFileFromArchive(tarReader *tar.Reader, targetDir s
 
 // extractDirectory creates a directory from the archive
 func (c *Checkpointer) extractDirectory(targetPath string) error {
-	return os.MkdirAll(targetPath, 0755) // NOSONAR - workspace directories need 0755 for proper operations
+	//nolint:gosec // G301: Workspace directories need 0755 for proper operations
+	return os.MkdirAll(targetPath, 0755)
 }
 
 // extractRegularFile extracts a regular file from the archive
 func (c *Checkpointer) extractRegularFile(tarReader *tar.Reader, targetPath string, header *tar.Header) error {
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper operations
+	//nolint:gosec // G301: Workspace directories need 0755 for proper operations
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
 		return err
 	}
 
-	outFile, err := os.Create(targetPath) // NOSONAR - target path is from trusted checkpoint archive
+	//nolint:gosec // G304: Target path from trusted checkpoint archive
+	outFile, err := os.Create(targetPath)
 	if err != nil {
 		return err
 	}
 
-	if _, err := io.Copy(outFile, tarReader); err != nil { // NOSONAR - archive is created internally and trusted
+	if _, err := io.Copy(outFile, tarReader); err != nil {
 		_ = outFile.Close() // Best effort cleanup on error
 		return err
 	}
 	_ = outFile.Close() // Best effort close
 
-	return os.Chmod(targetPath, os.FileMode(header.Mode)) // NOSONAR - file mode from trusted checkpoint archive
+	//nolint:gosec // G115: File mode from trusted checkpoint archive, no overflow risk
+	return os.Chmod(targetPath, os.FileMode(header.Mode))
 }
 
 // cleanupOldCheckpoints removes old checkpoints for a session
