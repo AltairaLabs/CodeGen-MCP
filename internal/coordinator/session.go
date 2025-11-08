@@ -8,15 +8,21 @@ import (
 
 // SessionManager manages MCP client sessions and workspace isolation
 type SessionManager struct {
-	sessions map[string]*Session
-	mu       sync.RWMutex
+	sessions       map[string]*Session
+	mu             sync.RWMutex
+	workerRegistry *WorkerRegistry
 }
 
 // NewSessionManager creates a new session manager
-func NewSessionManager() *SessionManager {
-	return &SessionManager{
+// workerRegistry can be nil for backward compatibility with tests
+func NewSessionManager(workerRegistry ...*WorkerRegistry) *SessionManager {
+	sm := &SessionManager{
 		sessions: make(map[string]*Session),
 	}
+	if len(workerRegistry) > 0 && workerRegistry[0] != nil {
+		sm.workerRegistry = workerRegistry[0]
+	}
+	return sm
 }
 
 // CreateSession creates a new session for an MCP client

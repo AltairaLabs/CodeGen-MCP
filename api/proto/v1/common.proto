@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package codegen.v1;
+
+option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
+
+// ResourceUsage tracks resource consumption
+message ResourceUsage {
+  int64 memory_bytes = 1;
+  int64 cpu_millicores = 2;
+  int64 disk_bytes = 3;
+}
+
+// ResourceLimits defines resource constraints
+message ResourceLimits {
+  int64 max_memory_bytes = 1;
+  int64 max_cpu_millicores = 2;
+  int64 max_disk_bytes = 3;
+  int32 max_concurrent_tasks = 4;       // Max tasks across all sessions
+  int64 max_memory_per_session = 5;     // Memory limit per session
+  int64 max_disk_per_session = 6;       // Disk limit per session
+}
+
+// SessionState represents the lifecycle state of a session
+enum SessionState {
+  SESSION_STATE_UNSPECIFIED = 0;
+  SESSION_STATE_INITIALIZING = 1;
+  SESSION_STATE_READY = 2;
+  SESSION_STATE_BUSY = 3;
+  SESSION_STATE_IDLE = 4;
+  SESSION_STATE_DRAINING = 5;           // Session being cleaned up
+  SESSION_STATE_CHECKPOINTING = 6;      // State being saved
+  SESSION_STATE_FAILED = 7;
+}
+
+// SessionInfo contains details about an active session
+message SessionInfo {
+  string session_id = 1;            // Unique session identifier
+  string workspace_id = 2;          // Associated workspace
+  int64 created_at_ms = 3;
+  int64 last_activity_ms = 4;
+  SessionState state = 5;
+  ResourceUsage usage = 6;          // Per-session resource usage
+  int32 active_tasks = 7;           // Tasks running in this session
+}

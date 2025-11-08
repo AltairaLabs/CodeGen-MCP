@@ -1,6 +1,6 @@
 # AltairaLabs CodeGen MCP Makefile
 
-.PHONY: help build build-coordinator build-worker test test-race lint coverage clean install run-coordinator run-worker
+.PHONY: help build build-coordinator build-worker test test-race lint coverage clean install run-coordinator run-worker proto
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -12,7 +12,10 @@ install: ## Install dependencies
 	@echo "Installing Go dependencies..."
 	@go mod download
 
-build: build-coordinator build-worker ## Build all components
+proto: ## Generate Go code from protobuf definitions
+	@./scripts/gen/generate-proto.sh
+
+build: proto build-coordinator build-worker ## Build all components
 
 build-coordinator: ## Build coordinator binary
 	@echo "Building coordinator..."

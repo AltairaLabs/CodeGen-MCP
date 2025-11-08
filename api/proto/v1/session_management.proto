@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package codegen.v1;
+
+import "api/proto/v1/common.proto";
+
+option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
+
+// SessionManagement handles session lifecycle and recovery
+service SessionManagement {
+  // Create a new session on a worker
+  rpc CreateSession(CreateSessionRequest) returns (CreateSessionResponse);
+  
+  // Destroy a session and cleanup resources
+  rpc DestroySession(DestroySessionRequest) returns (DestroySessionResponse);
+  
+  // Checkpoint session state for recovery
+  rpc CheckpointSession(CheckpointRequest) returns (CheckpointResponse);
+  
+  // Restore session from checkpoint
+  rpc RestoreSession(RestoreRequest) returns (RestoreResponse);
+  
+  // Get session status and metadata
+  rpc GetSessionStatus(SessionStatusRequest) returns (SessionStatusResponse);
+}
+
+message CreateSessionRequest {
+  string worker_id = 1;             // Target worker (or empty for auto-assignment)
+  string workspace_id = 2;          // Workspace identifier
+  string user_id = 3;               // User/tenant identifier
+  SessionConfig config = 4;
+}
+
+message SessionConfig {
+  map<string, string> env_vars = 1;
+  repeated string required_tools = 2;  // Tools this session needs
+  string language = 3;              // e.g., "python"
+  ResourceLimits limits = 4;        // Per-session resource limits
+  string base_image = 5;            // Container image (optional override)
+}
+
+message CreateSessionResponse {
+  string session_id = 1;            // Unique session identifier
+  string worker_id = 2;             // Assigned worker
+  string workspace_path = 3;        // Path to workspace on worker
+  SessionState state = 4;
+  int64 created_at_ms = 5;
+}
+
+message DestroySessionRequest {
+  string session_id = 1;
+  bool force = 2;                   // Force destroy even if tasks running
+  bool save_checkpoint = 3;         // Checkpoint before destroy
+}
+
+message DestroySessionResponse {
+  bool destroyed = 1;
+  string checkpoint_id = 2;         // If save_checkpoint was true
+  repeated string artifacts = 3;    // Final artifacts from session
+}
+
+message CheckpointRequest {
+  string session_id = 1;
+  string checkpoint_name = 2;       // Optional name for checkpoint
+  bool incremental = 3;             // Incremental vs. full checkpoint
+}
+
+message CheckpointResponse {
+  string checkpoint_id = 1;         // Unique checkpoint identifier
+  int64 size_bytes = 2;
+  string storage_url = 3;           // Object storage URL
+  CheckpointMetadata metadata = 4;
+}
+
+message CheckpointMetadata {
+  string session_id = 1;
+  string workspace_id = 2;
+  int64 created_at_ms = 3;
+  map<string, string> env_vars = 4;
+  repeated string installed_packages = 5;  // Python packages installed
+  repeated string modified_files = 6;      // Files changed from base
+  string checksum_sha256 = 7;
+}
+
+message RestoreRequest {
+  string checkpoint_id = 1;
+  string worker_id = 2;             // Target worker (or empty for auto-assignment)
+  bool create_new_session = 3;      // Create new session or restore existing
+}
+
+message RestoreResponse {
+  string session_id = 1;            // Restored or new session ID
+  string worker_id = 2;
+  SessionState state = 3;
+  CheckpointMetadata checkpoint_metadata = 4;
+}
+
+message SessionStatusRequest {
+  string session_id = 1;
+}
+
+message SessionStatusResponse {
+  string session_id = 1;
+  string worker_id = 2;
+  SessionState state = 3;
+  SessionInfo info = 4;
+  repeated string recent_tasks = 5;  // Recent task IDs
+  string last_checkpoint_id = 6;
+}

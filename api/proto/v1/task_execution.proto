@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package codegen.v1;
+
+import "api/proto/v1/common.proto";
+
+option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
+
+// TaskExecution handles tool execution requests
+service TaskExecution {
+  // Execute a tool operation (supports streaming logs)
+  rpc ExecuteTask(TaskRequest) returns (stream TaskResponse);
+  
+  // Cancel a running task
+  rpc CancelTask(CancelRequest) returns (CancelResponse);
+  
+  // Query task status
+  rpc GetTaskStatus(StatusRequest) returns (StatusResponse);
+}
+
+message TaskRequest {
+  string task_id = 1;              // Unique task identifier
+  string session_id = 2;           // Session ID (not worker registration session!)
+  string tool_name = 3;            // e.g., "fs.write", "run.python"
+  map<string, string> arguments = 4;  // Tool arguments (JSON-encoded)
+  TaskContext context = 5;
+  ExecutionConstraints constraints = 6;
+}
+
+message TaskContext {
+  string workspace_id = 1;         // Workspace identifier
+  string user_id = 2;              // User/tenant identifier
+  map<string, string> env_vars = 3;   // Environment overrides (merge with session env)
+  repeated string secrets = 4;     // Secret references (not values!)
+}
+
+message ExecutionConstraints {
+  int32 timeout_seconds = 1;
+  int64 max_memory_bytes = 2;
+  int64 max_output_bytes = 3;
+  bool allow_network = 4;
+  repeated string allowed_paths = 5;  // Path restrictions
+}
+
+message TaskResponse {
+  string task_id = 1;
+  
+  oneof payload {
+    ProgressUpdate progress = 2;
+    LogEntry log = 3;
+    TaskResult result = 4;
+    TaskError error = 5;
+  }
+}
+
+message ProgressUpdate {
+  int32 percent_complete = 1;
+  string stage = 2;                // e.g., "installing_packages", "running_tests"
+  string message = 3;
+}
+
+message LogEntry {
+  enum Level {
+    LEVEL_UNSPECIFIED = 0;
+    LEVEL_DEBUG = 1;
+    LEVEL_INFO = 2;
+    LEVEL_WARN = 3;
+    LEVEL_ERROR = 4;
+  }
+  Level level = 1;
+  string message = 2;
+  int64 timestamp_ms = 3;
+  string source = 4;               // e.g., "pytest", "pip"
+}
+
+message TaskResult {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAILURE = 2;
+    STATUS_TIMEOUT = 3;
+    STATUS_CANCELLED = 4;
+  }
+  Status status = 1;
+  map<string, string> outputs = 2;    // Tool-specific outputs
+  repeated string artifacts = 3;      // Artifact IDs/URLs
+  ExecutionMetadata metadata = 4;
+}
+
+message ExecutionMetadata {
+  int64 start_time_ms = 1;
+  int64 end_time_ms = 2;
+  int64 duration_ms = 3;
+  ResourceUsage peak_usage = 4;
+  int32 exit_code = 5;             // For shell/exec operations
+}
+
+message TaskError {
+  string code = 1;                 // e.g., "EXEC_TIMEOUT", "PATH_VIOLATION"
+  string message = 2;
+  string details = 3;              // Stack trace, logs, etc.
+  bool retriable = 4;
+}
+
+message CancelRequest {
+  string task_id = 1;
+  string session_id = 2;
+  string reason = 3;
+}
+
+message CancelResponse {
+  bool cancelled = 1;
+  string state = 2;                // Current task state
+}
+
+message StatusRequest {
+  string task_id = 1;
+  string session_id = 2;
+}
+
+message StatusResponse {
+  string task_id = 1;
+  TaskResult.Status status = 2;
+  ProgressUpdate progress = 3;
+  int64 elapsed_ms = 4;
+}

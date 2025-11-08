@@ -31,14 +31,30 @@ jobs:
     - name: Install dependencies
       run: make install
     
-    - name: Run tests with coverage
+    - name: Run all tests with coverage
       run: go test -coverprofile=coverage.out -covermode=atomic ./...
+    
+    - name: Generate coverage report
+      run: |
+        go tool cover -func=coverage.out | tee coverage-summary.txt
+        echo "### Test Coverage Summary" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        tail -1 coverage-summary.txt >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+    
+    - name: Test coordinator package
+      run: go test -v ./internal/coordinator/... -count=1
+    
+    - name: Test worker package
+      run: go test -v ./internal/worker/... -count=1
     
     - name: Upload coverage artifact
       uses: actions/upload-artifact@v4
       with:
         name: coverage-report
-        path: coverage.out
+        path: |
+          coverage.out
+          coverage-summary.txt
         retention-days: 5
   
   lint:
@@ -82,11 +98,23 @@ jobs:
       with:
         go-version: '1.25'
     
-    - name: Build
+    - name: Build all components
       run: make build
     
-    - name: Test coordinator
+    - name: Test coordinator binary
       run: ./bin/coordinator --version
+    
+    - name: Test worker binary
+      run: ./bin/worker --version
+    
+    - name: Upload binaries
+      uses: actions/upload-artifact@v4
+      with:
+        name: binaries
+        path: |
+          bin/coordinator
+          bin/worker
+        retention-days: 5
   
   sonarqube:
     name: SonarQube Analysis
@@ -114,4 +142,3 @@ jobs:
       uses: SonarSource/sonarqube-scan-action@v3
       env:
         SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}

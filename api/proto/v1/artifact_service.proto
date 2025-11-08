@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package codegen.v1;
+
+import "api/proto/v1/common.proto";
+
+option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
+
+// ArtifactService manages artifact storage and retrieval
+service ArtifactService {
+  // Request signed upload URL for artifact
+  rpc GetUploadURL(UploadRequest) returns (UploadResponse);
+  
+  // Record artifact metadata after upload
+  rpc RecordArtifact(ArtifactMetadata) returns (ArtifactResponse);
+}
+
+message UploadRequest {
+  string task_id = 1;
+  string session_id = 2;
+  string artifact_name = 3;
+  string content_type = 4;
+  int64 size_bytes = 5;
+}
+
+message UploadResponse {
+  string upload_url = 1;           // Pre-signed S3/MinIO URL
+  string artifact_id = 2;          // Unique artifact identifier
+  int64 expires_at_ms = 3;         // URL expiration
+}
+
+message ArtifactMetadata {
+  string artifact_id = 1;
+  string task_id = 2;
+  string name = 3;
+  string content_type = 4;
+  int64 size_bytes = 5;
+  string checksum_sha256 = 6;
+  map<string, string> labels = 7;  // e.g., {"type": "wheel", "python": "3.11"}
+}
+
+message ArtifactResponse {
+  bool recorded = 1;
+  string download_url = 2;         // Pre-signed download URL
+}

@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package codegen.v1;
+
+import "api/proto/v1/common.proto";
+
+option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
+
+// WorkerLifecycle manages worker registration and health
+service WorkerLifecycle {
+  // Worker registers with coordinator on startup
+  rpc RegisterWorker(RegisterRequest) returns (RegisterResponse);
+  
+  // Worker sends periodic heartbeat with health status and session capacity
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  
+  // Worker gracefully deregisters before shutdown
+  rpc DeregisterWorker(DeregisterRequest) returns (DeregisterResponse);
+}
+
+message RegisterRequest {
+  string worker_id = 1;           // Unique worker identifier (from env)
+  string auth_token = 2;          // Bearer token for authentication
+  WorkerCapabilities capabilities = 3;
+  ResourceLimits limits = 4;
+  string version = 5;             // Worker binary version
+}
+
+message WorkerCapabilities {
+  repeated string supported_tools = 1;  // e.g., ["fs.write", "run.python"]
+  repeated string languages = 2;        // e.g., ["python"]
+  int32 max_sessions = 3;               // Max concurrent sessions this worker supports
+  map<string, string> metadata = 4;     // Extensible metadata
+}
+
+message RegisterResponse {
+  string session_id = 1;          // Worker's registration session ID
+  string task_endpoint = 2;       // gRPC endpoint for task assignment
+  int32 heartbeat_interval_sec = 3;
+  bool accepted = 4;
+  string reason = 5;              // If not accepted, why?
+}
+
+message HeartbeatRequest {
+  string worker_id = 1;
+  string session_id = 2;            // Worker's registration session ID
+  WorkerStatus status = 3;
+  SessionCapacity capacity = 4;     // Current session availability
+}
+
+message SessionCapacity {
+  int32 total_sessions = 1;         // Max sessions worker can handle
+  int32 active_sessions = 2;        // Currently running sessions
+  int32 available_sessions = 3;     // Free session slots
+  repeated SessionInfo sessions = 4;  // Details of active sessions
+}
+
+message WorkerStatus {
+  enum State {
+    STATE_UNSPECIFIED = 0;
+    STATE_IDLE = 1;
+    STATE_BUSY = 2;
+    STATE_DRAINING = 3;
+    STATE_UNHEALTHY = 4;
+  }
+  State state = 1;
+  int32 active_tasks = 2;           // Total tasks across all sessions
+  ResourceUsage current_usage = 3;  // Total resource usage
+  repeated string errors = 4;       // Recent errors
+}
+
+message HeartbeatResponse {
+  bool continue_serving = 1;
+  repeated string commands = 2;    // e.g., ["drain", "reload_config"]
+}
+
+message DeregisterRequest {
+  string worker_id = 1;
+  string session_id = 2;            // Worker's registration session ID
+  string reason = 3;                // Shutdown reason
+}
+
+message DeregisterResponse {
+  bool acknowledged = 1;
+}
