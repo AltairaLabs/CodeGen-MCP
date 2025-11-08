@@ -1,9 +1,12 @@
 package worker
 
 import (
+	"archive/tar"
+	"compress/gzip"
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
@@ -285,5 +288,117 @@ func TestCheckpointerCheckpointAPI(t *testing.T) {
 
 	if resp.Metadata == nil {
 		t.Error("Expected checkpoint metadata")
+	}
+}
+
+func TestCheckpointerPathTraversalProtection(t *testing.T) {
+	baseWorkspace := t.TempDir()
+	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	checkpointer := NewCheckpointer(pool, baseWorkspace)
+
+	// Create a test session
+	sessionResp, err := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
+		WorkspaceId: "test",
+		UserId:      "test-user",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	session, _ := pool.GetSession(sessionResp.SessionId)
+
+	// Test malicious paths
+	maliciousPaths := []string{
+		"../../../etc/passwd",
+		"../../secret.txt",
+		"/etc/shadow",
+		"normal/../../../etc/hosts",
+	}
+
+	// Create temporary archive with malicious paths
+	archivePath := createMaliciousArchive(t, baseWorkspace, maliciousPaths)
+	defer os.Remove(archivePath)
+
+	// Try to extract the malicious archive
+	tarReader, closeFunc, err := checkpointer.openArchiveReader(archivePath)
+	if err != nil {
+		t.Fatalf("Failed to open archive: %v", err)
+	}
+	defer closeFunc()
+
+	rejectedFiles := countRejectedExtractions(t, checkpointer, tarReader, session.WorkspacePath)
+
+	// All malicious paths should be rejected
+	if rejectedFiles != len(maliciousPaths) {
+		t.Errorf("Expected all %d malicious paths to be rejected, got %d", len(maliciousPaths), rejectedFiles)
+	}
+
+	// Verify no files were created outside workspace
+	verifyNoFilesOutsideWorkspace(t, session.WorkspacePath)
+}
+
+func createMaliciousArchive(t *testing.T, baseDir string, paths []string) string {
+	t.Helper()
+	archivePath := filepath.Join(baseDir, "malicious.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatalf("Failed to create archive: %v", err)
+	}
+
+	gzipWriter := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gzipWriter)
+
+	for _, path := range paths {
+		header := &tar.Header{
+			Name:     path,
+			Mode:     0600,
+			Size:     4,
+			Typeflag: tar.TypeReg,
+		}
+		if err := tarWriter.WriteHeader(header); err != nil {
+			t.Fatalf("Failed to write header: %v", err)
+		}
+		if _, err := tarWriter.Write([]byte("test")); err != nil {
+			t.Fatalf("Failed to write data: %v", err)
+		}
+	}
+
+	tarWriter.Close()
+	gzipWriter.Close()
+	file.Close()
+	return archivePath
+}
+
+func countRejectedExtractions(t *testing.T, checkpointer *Checkpointer, tarReader *tar.Reader, workspace string) int {
+	t.Helper()
+	rejected := 0
+
+	for {
+		header, err := tarReader.Next()
+		if err != nil {
+			break
+		}
+
+		err = checkpointer.extractFileFromArchive(tarReader, workspace, header)
+		if err != nil && filepath.HasPrefix(err.Error(), "illegal file path") {
+			rejected++
+		}
+	}
+	return rejected
+}
+
+func verifyNoFilesOutsideWorkspace(t *testing.T, workspacePath string) {
+	t.Helper()
+	parentDir := filepath.Dir(workspacePath)
+	entries, _ := os.ReadDir(parentDir)
+
+	for _, entry := range entries {
+		name := entry.Name()
+		// Allow workspace dir, checkpoints dir, and the test archive file
+		if name != filepath.Base(workspacePath) &&
+			name != ".checkpoints" &&
+			!strings.HasSuffix(name, ".tar.gz") {
+			t.Errorf("Unexpected file/directory created outside workspace: %s", name)
+		}
 	}
 }

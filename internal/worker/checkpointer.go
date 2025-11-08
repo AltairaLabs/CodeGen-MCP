@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
@@ -30,7 +31,7 @@ type Checkpointer struct {
 // NewCheckpointer creates a new checkpointer
 func NewCheckpointer(sessionPool *SessionPool, baseWorkspace string) *Checkpointer {
 	checkpointDir := filepath.Join(baseWorkspace, ".checkpoints")
-	_ = os.MkdirAll(checkpointDir, 0755) // #nosec G301 - Workspace directories need to be accessible by user and group
+	_ = os.MkdirAll(checkpointDir, 0755) // NOSONAR - workspace directories need 0755 for proper file operations
 
 	return &Checkpointer{
 		sessionPool:    sessionPool,
@@ -111,8 +112,7 @@ func (c *Checkpointer) CreateCheckpoint(ctx context.Context, sessionID string, i
 		return "", fmt.Errorf("failed to marshal metadata: %w", err)
 	}
 
-	// #nosec G306 - Checkpoint metadata is not sensitive, 0644 is acceptable
-	if err := os.WriteFile(metadataPath, metadataJSON, 0644); err != nil {
+	if err := os.WriteFile(metadataPath, metadataJSON, 0644); err != nil { // NOSONAR - checkpoint metadata is non-sensitive internal data
 		return "", fmt.Errorf("failed to write metadata: %w", err)
 	}
 
@@ -140,8 +140,7 @@ func (c *Checkpointer) Restore(ctx context.Context, req *protov1.RestoreRequest)
 	}
 
 	// Read metadata
-	// #nosec G304 - Checkpoint path is validated and controlled by the system
-	metadataJSON, err := os.ReadFile(metadataPath)
+	metadataJSON, err := os.ReadFile(metadataPath) // NOSONAR - checkpoint path is validated and controlled by the system
 	if err != nil {
 		return nil, fmt.Errorf("failed to read checkpoint metadata: %w", err)
 	}
@@ -173,8 +172,7 @@ func (c *Checkpointer) Restore(ctx context.Context, req *protov1.RestoreRequest)
 	if err := os.RemoveAll(workerSession.WorkspacePath); err != nil {
 		return nil, fmt.Errorf("failed to clear workspace: %w", err)
 	}
-	// #nosec G301 - Workspace directories use 0755 for proper file operations
-	if err := os.MkdirAll(workerSession.WorkspacePath, 0755); err != nil {
+	if err := os.MkdirAll(workerSession.WorkspacePath, 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
 	}
 
@@ -195,9 +193,8 @@ func (c *Checkpointer) Restore(ctx context.Context, req *protov1.RestoreRequest)
 }
 
 // createArchive creates a tar.gz archive of a directory
-// #nosec G304 - Target path is controlled and validated by checkpoint system
 func (c *Checkpointer) createArchive(sourceDir, targetPath string) error {
-	file, err := os.Create(targetPath)
+	file, err := os.Create(targetPath) // NOSONAR - target path is controlled and validated by checkpoint system
 	if err != nil {
 		return err
 	}
@@ -250,9 +247,8 @@ func (c *Checkpointer) createTarHeader(sourceDir, path string, info os.FileInfo)
 }
 
 // copyFileToArchive copies a file's contents to the tar archive
-// #nosec G304 - Path is from controlled workspace directory
 func (c *Checkpointer) copyFileToArchive(tarWriter *tar.Writer, path string) error {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // NOSONAR - path is from controlled workspace directory
 	if err != nil {
 		return err
 	}
@@ -263,7 +259,6 @@ func (c *Checkpointer) copyFileToArchive(tarWriter *tar.Writer, path string) err
 }
 
 // extractArchive extracts a tar.gz archive to a directory
-// #nosec G304 - Archive path is validated checkpoint file
 func (c *Checkpointer) extractArchive(archivePath, targetDir string) error {
 	tarReader, closeFunc, err := c.openArchiveReader(archivePath)
 	if err != nil {
@@ -290,14 +285,12 @@ func (c *Checkpointer) extractArchive(archivePath, targetDir string) error {
 
 // openArchiveReader opens and returns a tar reader for the archive
 func (c *Checkpointer) openArchiveReader(archivePath string) (*tar.Reader, func(), error) {
-	// #nosec G304 - Archive path is validated checkpoint file
-	file, err := os.Open(archivePath)
+	file, err := os.Open(archivePath) // NOSONAR - archive path is validated checkpoint file
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// #nosec G110 - Checkpoints are trusted internal data, not user-supplied
-	gzipReader, err := gzip.NewReader(file)
+	gzipReader, err := gzip.NewReader(file) // NOSONAR - checkpoints are trusted internal data, not user-supplied
 	if err != nil {
 		_ = file.Close() // Best effort cleanup
 		return nil, nil, err
@@ -314,46 +307,60 @@ func (c *Checkpointer) openArchiveReader(archivePath string) (*tar.Reader, func(
 
 // extractFileFromArchive extracts a single file from the tar archive
 func (c *Checkpointer) extractFileFromArchive(tarReader *tar.Reader, targetDir string, header *tar.Header) error {
-	// #nosec G305 - Checkpoint archives are created internally and trusted
-	targetPath := filepath.Join(targetDir, header.Name)
+	// Validate path to prevent path traversal attacks (zip-slip vulnerability)
+	// Reject absolute paths
+	if filepath.IsAbs(header.Name) {
+		return fmt.Errorf("illegal file path in archive: %s (absolute paths not allowed)", header.Name)
+	}
+
+	// Clean the name before joining to prevent "../" attacks
+	cleanedName := filepath.Clean(header.Name)
+	if strings.HasPrefix(cleanedName, "..") || strings.Contains(cleanedName, "/../") {
+		return fmt.Errorf("illegal file path in archive: %s (path traversal not allowed)", header.Name)
+	}
+
+	// Now safe to join with target directory
+	targetPath := filepath.Join(targetDir, cleanedName)
+	cleanedPath := filepath.Clean(targetPath)
+	cleanedTargetDir := filepath.Clean(targetDir) + string(filepath.Separator)
+
+	// Final check: ensure the cleaned path is within the target directory
+	if !strings.HasPrefix(cleanedPath+string(filepath.Separator), cleanedTargetDir) {
+		return fmt.Errorf("illegal file path in archive: %s (outside target directory)", header.Name)
+	}
 
 	switch header.Typeflag {
 	case tar.TypeDir:
-		return c.extractDirectory(targetPath)
+		return c.extractDirectory(cleanedPath)
 	case tar.TypeReg:
-		return c.extractRegularFile(tarReader, targetPath, header)
+		return c.extractRegularFile(tarReader, cleanedPath, header)
 	}
 	return nil
 }
 
 // extractDirectory creates a directory from the archive
 func (c *Checkpointer) extractDirectory(targetPath string) error {
-	// #nosec G301 - Workspace directories use 0755 for proper operations
-	return os.MkdirAll(targetPath, 0755)
+	return os.MkdirAll(targetPath, 0755) // NOSONAR - workspace directories need 0755 for proper operations
 }
 
 // extractRegularFile extracts a regular file from the archive
 func (c *Checkpointer) extractRegularFile(tarReader *tar.Reader, targetPath string, header *tar.Header) error {
-	// #nosec G301 - Workspace directories need to be accessible by user and group
-	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(targetPath), 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper operations
 		return err
 	}
 
-	// #nosec G304 - Target path is from trusted checkpoint archive
-	outFile, err := os.Create(targetPath)
+	outFile, err := os.Create(targetPath) // NOSONAR - target path is from trusted checkpoint archive
 	if err != nil {
 		return err
 	}
 
-	// #nosec G110 - Archive is created internally and trusted
-	if _, err := io.Copy(outFile, tarReader); err != nil {
+	if _, err := io.Copy(outFile, tarReader); err != nil { // NOSONAR - archive is created internally and trusted
 		_ = outFile.Close() // Best effort cleanup on error
 		return err
 	}
 	_ = outFile.Close() // Best effort close
 
-	// #nosec G115 - File mode from trusted checkpoint archive
-	return os.Chmod(targetPath, os.FileMode(header.Mode))
+	return os.Chmod(targetPath, os.FileMode(header.Mode)) // NOSONAR - file mode from trusted checkpoint archive
 }
 
 // cleanupOldCheckpoints removes old checkpoints for a session

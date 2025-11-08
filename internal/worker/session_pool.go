@@ -57,8 +57,7 @@ func (sp *SessionPool) CreateSession(ctx context.Context, req *protov1.CreateSes
 	defer sp.mu.Unlock()
 
 	// Check capacity
-	// #nosec G115 - Session count is bounded by maxSessions config, no overflow risk
-	if int32(len(sp.sessions)) >= sp.maxSessions {
+	if int32(len(sp.sessions)) >= sp.maxSessions { // NOSONAR - session count is bounded by maxSessions config, no overflow risk
 		return nil, fmt.Errorf("session pool at capacity: %d/%d", len(sp.sessions), sp.maxSessions)
 	}
 
@@ -67,8 +66,7 @@ func (sp *SessionPool) CreateSession(ctx context.Context, req *protov1.CreateSes
 
 	// Create isolated workspace directory
 	workspacePath := filepath.Join(sp.baseWorkspace, sessionID)
-	// #nosec G301 - Workspace directories need to be accessible by user and group
-	if err := os.MkdirAll(workspacePath, 0755); err != nil {
+	if err := os.MkdirAll(workspacePath, 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
 	}
 
@@ -160,8 +158,7 @@ func (sp *SessionPool) GetCapacity() *protov1.SessionCapacity {
 		session.mu.RUnlock()
 	}
 
-	// #nosec G115 - Session count is bounded by maxSessions config, no overflow risk
-	activeSessions := int32(len(sp.sessions))
+	activeSessions := int32(len(sp.sessions)) // NOSONAR - session count is bounded by maxSessions config, no overflow risk
 	return &protov1.SessionCapacity{
 		TotalSessions:     sp.maxSessions,
 		ActiveSessions:    activeSessions,
@@ -266,8 +263,7 @@ func (sp *SessionPool) initializeSession(ctx context.Context, session *WorkerSes
 	dirs := []string{"src", "tests", "artifacts"}
 	for _, dir := range dirs {
 		dirPath := filepath.Join(session.WorkspacePath, dir)
-		// #nosec G301 - Workspace directories need to be accessible by user and group
-		if err := os.MkdirAll(dirPath, 0755); err != nil {
+		if err := os.MkdirAll(dirPath, 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
 			return fmt.Errorf("failed to create directory %s: %w", dir, err)
 		}
 	}
@@ -297,8 +293,7 @@ func (sp *SessionPool) initializePythonVenv(ctx context.Context, session *Worker
 	}
 
 	// Create venv
-	// #nosec G204 - Command uses fixed python3 binary and venv module with user-controlled path
-	cmd := exec.CommandContext(ctx, "python3", "-m", "venv", venvPath)
+	cmd := exec.CommandContext(ctx, "python3", "-m", "venv", venvPath) // NOSONAR - python3 is system binary, venvPath is in isolated session workspace
 	cmd.Dir = session.WorkspacePath
 
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -307,8 +302,7 @@ func (sp *SessionPool) initializePythonVenv(ctx context.Context, session *Worker
 
 	// Upgrade pip in the venv
 	pipPath := filepath.Join(venvPath, "bin", "pip")
-	// #nosec G204 - Command uses pip from session's isolated venv directory
-	cmd = exec.CommandContext(ctx, pipPath, "install", "--upgrade", "pip")
+	cmd = exec.CommandContext(ctx, pipPath, "install", "--upgrade", "pip") // NOSONAR - pip binary is in session's isolated venv directory
 	cmd.Dir = session.WorkspacePath
 
 	if output, err := cmd.CombinedOutput(); err != nil {
