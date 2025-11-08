@@ -1,6 +1,6 @@
-# Contributing to PromptKit
+# Contributing to CodeGen MCP
 
-Thank you for your interest in contributing to PromptKit! This document provides comprehensive guidelines and instructions for contributing to our open source project.
+Thank you for your interest in contributing to CodeGen MCP! This document provides comprehensive guidelines and instructions for contributing to our open source project.
 
 ## Code of Conduct
 
@@ -59,21 +59,25 @@ Signed-off-by: Your Name <your.email@example.com>
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.25 or later
 - Make (for build automation)
+- Docker (for worker sandboxes)
 
 ### Setup
 
 ```bash
 # Clone your fork
-git clone https://github.com/YOUR_USERNAME/PromptKit.git
-cd PromptKit
+git clone https://github.com/YOUR_USERNAME/CodeGen-MCP.git
+cd CodeGen-MCP
 
 # Install dependencies
 make install
 
 # Run tests
 make test
+
+# Run linter
+make lint
 
 # Build all components
 make build
@@ -82,107 +86,121 @@ make build
 ### Project Structure
 
 ```
-PromptKit/
-├── runtime/          # Core runtime components
-├── pkg/              # Shared packages
-├── tools/arena/      # PromptKit Arena CLI
-├── tools/packc/      # Pack Compiler tool
-├── sdk/              # PromptKit SDK
-├── examples/         # Example configurations
-└── docs/             # Documentation
+CodeGen-MCP/
+├── cmd/
+│   ├── coordinator/     # Coordinator service entry point
+│   └── worker/          # Worker agent entry point
+├── internal/
+│   ├── coordinator/     # Coordinator implementation
+│   │   ├── server.go    # MCP server
+│   │   ├── session.go   # Session management
+│   │   ├── worker.go    # Worker client
+│   │   └── audit.go     # Audit logging
+│   ├── worker/          # Worker implementation
+│   ├── mcp/             # MCP protocol schemas
+│   └── sandbox/         # Sandbox runtime
+├── docker/
+│   └── builder/         # Docker builder for workers
+├── docs/                # Documentation
+│   ├── coordinator/     # Coordinator architecture docs
+│   └── README.md        # Documentation index
+├── bin/                 # Compiled binaries
+├── RFCs/                # Architecture RFCs
+├── tools.go             # Go tools dependencies
+└── Makefile             # Build automation
 ```
 
 ## Component-Specific Contribution Guidelines
 
-### Arena CLI (`tools/arena/`)
+### Coordinator (`internal/coordinator/`)
 
-**Focus**: Testing framework for LLM applications
-
-**Key Areas for Contribution:**
-- New test scenario types and assertions
-- Provider integrations (OpenAI, Anthropic, Google, etc.)
-- MCP (Model Context Protocol) tool integrations
-- Report generation and visualization improvements
-- Performance optimizations for large test suites
-
-**Testing Arena Changes:**
-```bash
-# Build Arena
-make build-arena
-
-# Run Arena tests
-cd tools/arena && go test ./...
-
-# Test with example scenarios
-./bin/promptarena run examples/customer-support/arena.yaml
-```
-
-### PackC CLI (`tools/packc/`)
-
-**Focus**: Prompt packaging and compilation tool
+**Focus**: Control plane for managing sessions and workers
 
 **Key Areas for Contribution:**
-- Pack format enhancements and validation
-- New output formats and deployment targets
-- Template processing improvements
-- Schema validation and error reporting
+- MCP server and protocol improvements
+- Session management and isolation
+- Worker pool orchestration and health monitoring
+- Audit logging and observability
+- Security and access control
+- Performance optimizations for concurrent sessions
 
-**Testing PackC Changes:**
+**Testing Coordinator Changes:**
 ```bash
-# Build PackC
-make build-packc
+# Build Coordinator
+make build
 
-# Run PackC tests
-cd tools/packc && go test ./...
-
-# Test pack compilation
-./bin/packc build examples/customer-support/packs/
-```
-
-### SDK (`sdk/`)
-
-**Focus**: Production-ready library for deploying LLM applications
-
-**Key Areas for Contribution:**
-- High-level API improvements
-- New conversation patterns and middleware
-- Integration helpers and utilities
-- Performance optimizations
-- Example applications and tutorials
-
-**Testing SDK Changes:**
-```bash
-# Build and test SDK
-cd sdk && go test ./...
+# Run Coordinator tests
+cd internal/coordinator && go test ./...
 
 # Run integration tests
-cd sdk && go test -tags=integration ./...
+cd internal/coordinator && go test -run Integration ./...
 
-# Test with examples
-cd examples/customer-support && go run main.go
+# Start Coordinator locally
+./bin/coordinator
 ```
 
-### Runtime (`runtime/`)
+### Worker (`internal/worker/`)
 
-**Focus**: Core engine and shared components
+**Focus**: Data plane for executing code in sandboxes
 
 **Key Areas for Contribution:**
-- Provider implementations and optimizations
-- Tool execution framework
-- State management and persistence
-- Pipeline processing improvements
-- Security and error handling
+- Sandbox runtime improvements
+- Docker integration and optimization
+- Tool execution framework (file operations, code execution)
+- Resource management and cleanup
+- Security and isolation enhancements
 
-**Testing Runtime Changes:**
+**Testing Worker Changes:**
 ```bash
-# Build and test runtime
-cd runtime && go test ./...
+# Build Worker
+make build
 
-# Run comprehensive tests
-make test
+# Run Worker tests
+cd internal/worker && go test ./...
 
-# Check coverage
-make coverage
+# Test with Docker
+docker build -f docker/builder/Dockerfile -t codegen-worker .
+docker run codegen-worker
+```
+
+### MCP Protocol (`internal/mcp/`)
+
+**Focus**: Model Context Protocol schemas and tooling
+
+**Key Areas for Contribution:**
+- MCP tool definitions and schemas
+- Protocol validation
+- Documentation and examples
+- New tool types and capabilities
+
+**Testing MCP Changes:**
+```bash
+# Validate schemas
+cd internal/mcp/schema && make validate
+
+# Run protocol tests
+cd internal/mcp && go test ./...
+```
+
+### Sandbox (`internal/sandbox/`)
+
+**Focus**: Isolated execution environments
+
+**Key Areas for Contribution:**
+- Language runtime support (Python, Node.js, Go, etc.)
+- Filesystem isolation improvements
+- Resource limits and monitoring
+- Security hardening
+- Performance optimizations
+
+**Testing Sandbox Changes:**
+```bash
+# Run sandbox tests
+cd internal/sandbox && go test ./...
+
+# Test with various runtimes
+./bin/worker --runtime python
+./bin/worker --runtime nodejs
 ```
 
 ## Coding Guidelines
@@ -198,16 +216,20 @@ make coverage
 ### Testing
 
 - Write unit tests for new functionality
-- Maintain test coverage above 50%
+- Maintain test coverage above 80%
 - Use table-driven tests where appropriate
-- Mock external dependencies
+- Mock external dependencies (workers, storage)
+- Write integration tests for complex workflows
+- Test concurrent scenarios and race conditions
 
 ### Documentation
 
 - Update README.md if adding features
 - Add inline comments for complex logic
-- Update relevant example configurations
+- Update component-specific docs in `docs/`
 - Add package documentation for new packages
+- Include Mermaid diagrams for architecture changes
+- Update RFCs for significant design decisions
 
 ## Pull Request Process
 
