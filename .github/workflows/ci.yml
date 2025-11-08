@@ -94,7 +94,7 @@ jobs:
       run: go test -coverprofile=coverage.out -covermode=atomic ./...
     
     - name: Run golangci-lint with JSON output
-      run: golangci-lint run --out-format json > golangci-lint-report.json || true
+      run: go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2 run --out-format json > golangci-lint-report.json || true
     
     - name: SonarQube Scan
       uses: SonarSource/sonarqube-scan-action@v3

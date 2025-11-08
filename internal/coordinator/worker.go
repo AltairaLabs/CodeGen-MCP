@@ -69,8 +69,20 @@ func (m *MockWorkerClient) ExecuteTask(
 	toolName string,
 	args TaskArgs,
 ) (*TaskResult, error) {
-	// Simulate some work
-	time.Sleep(mockDuration)
+	// Check for context cancellation before processing
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Simulate some work with context awareness
+	select {
+	case <-time.After(mockDuration):
+		// Normal execution
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
 
 	switch toolName {
 	case toolEcho:
