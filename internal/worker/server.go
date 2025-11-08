@@ -174,3 +174,8 @@ func (ws *WorkerServer) RecordArtifact(ctx context.Context, req *protov1.Artifac
 func (ws *WorkerServer) GetCapacity() *protov1.SessionCapacity {
 	return ws.sessionPool.GetCapacity()
 }
+
+// GetSessionPool returns the session pool for registration client
+func (ws *WorkerServer) GetSessionPool() *SessionPool {
+	return ws.sessionPool
+}

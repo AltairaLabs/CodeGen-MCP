@@ -4,18 +4,23 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"log"
 	"log/slog"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
+	"google.golang.org/grpc"
 )
 
 const (
-	defaultSessionMaxAge = 30 * time.Minute
-	cleanupInterval      = 5 * time.Minute
+	defaultSessionMaxAge  = 30 * time.Minute
+	cleanupInterval       = 5 * time.Minute
+	defaultGRPCPort       = "50050"
+	workerCleanupInterval = 1 * time.Minute
 )
 
 var (
@@ -42,12 +47,20 @@ func main() {
 	}))
 	slog.SetDefault(logger)
 
+	// Read gRPC port from environment
+	grpcPort := os.Getenv("GRPC_PORT")
+	if grpcPort == "" {
+		grpcPort = defaultGRPCPort
+	}
+
 	logger.Info("Starting CodeGen MCP Coordinator",
 		"version", "0.1.0",
 		"debug", *debug,
+		"grpc_port", grpcPort,
 	)
 
 	// Initialize components
+	workerRegistry := coordinator.NewWorkerRegistry()
 	sessionManager := coordinator.NewSessionManager()
 	workerClient := coordinator.NewMockWorkerClient()
 	auditLogger := coordinator.NewAuditLogger(logger)
@@ -65,18 +78,40 @@ func main() {
 		"version", cfg.Version,
 	)
 
-	// Setup graceful shutdown
+	// Create coordinator gRPC server for worker lifecycle
+	coordServer := coordinator.NewCoordinatorServer(workerRegistry, sessionManager, logger)
+	grpcServer := grpc.NewServer()
+	coordServer.RegisterWithServer(grpcServer)
+
+	// Setup context for shutdown
 	ctx, cancel := context.WithCancel(context.Background())
+
+	// Start listening for worker connections
+	listenConfig := net.ListenConfig{}
+	lis, err := listenConfig.Listen(ctx, "tcp", fmt.Sprintf(":%s", grpcPort))
+	if err != nil {
+		cancel()
+		log.Fatalf("Failed to listen on port %s: %v", grpcPort, err)
+	}
 	defer cancel()
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 
-	// Start server in goroutine
+	// Start gRPC server for workers
+	go func() {
+		logger.Info("Starting gRPC server for workers", "port", grpcPort)
+		if err := grpcServer.Serve(lis); err != nil {
+			logger.Error("gRPC server error", "error", err)
+			cancel()
+		}
+	}()
+
+	// Start MCP server in goroutine
 	go func() {
 		logger.Info("Starting MCP server on stdio")
 		if err := mcpServer.Serve(); err != nil {
-			logger.Error("Server error", "error", err)
+			logger.Error("MCP server error", "error", err)
 			cancel()
 		}
 	}()
@@ -99,6 +134,9 @@ func main() {
 		}
 	}()
 
+	// Start worker cleanup goroutine
+	go coordServer.StartCleanupLoop(ctx, workerCleanupInterval)
+
 	// Wait for shutdown signal
 	select {
 	case <-sigChan:
@@ -108,6 +146,10 @@ func main() {
 	}
 
 	logger.Info("Shutting down gracefully")
+
+	// Stop gRPC server
+	logger.Info("Stopping gRPC server")
+	grpcServer.GracefulStop()
 
 	// Allow sessions to drain
 	if count := sessionManager.SessionCount(); count > 0 {
