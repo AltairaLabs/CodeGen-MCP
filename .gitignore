@@ -7,6 +7,8 @@
 *.test
 *.out
 
+
+
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.cov
 
@@ -20,6 +22,7 @@ go.work
 .idea/
 .vscode/
 *.swp
+docs/local-backlog/
 
 # Docker
 *.log
@@ -27,3 +30,5 @@ docker-compose.override.yml
 .env
 .env.*
 .docker/
+
+bin/**

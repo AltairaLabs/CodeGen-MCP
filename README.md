@@ -2,9 +2,25 @@
 
 > **Distributed sandbox and Model Context Protocol (MCP) provider for LLM-driven code generation and testing.**
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Go](https://img.shields.io/badge/Go-1.25+-blue)]()
+<!-- Build & Quality Badges -->
+[![CI](https://github.com/AltairaLabs/CodeGen-MCP/workflows/CI/badge.svg)](https://github.com/AltairaLabs/CodeGen-MCP/actions/workflows/ci.yml)
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=AltairaLabs_CodeGen-MCP&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=AltairaLabs_CodeGen-MCP)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=AltairaLabs_CodeGen-MCP&metric=coverage)](https://sonarcloud.io/summary/new_code?id=AltairaLabs_CodeGen-MCP)
+[![Go Report Card](https://goreportcard.com/badge/github.com/AltairaLabs/CodeGen-MCP)](https://goreportcard.com/report/github.com/AltairaLabs/CodeGen-MCP)
+
+<!-- Security & Compliance Badges -->
+[![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=AltairaLabs_CodeGen-MCP&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=AltairaLabs_CodeGen-MCP)
+[![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=AltairaLabs_CodeGen-MCP&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=AltairaLabs_CodeGen-MCP)
+[![Security Rating](https://sonarcloud.io/api/project_badges/measure?project=AltairaLabs_CodeGen-MCP&metric=security_rating)](https://sonarcloud.io/summary/new_code?id=AltairaLabs_CodeGen-MCP)
+
+<!-- Version & Distribution Badges -->
+[![Go Reference](https://pkg.go.dev/badge/github.com/AltairaLabs/CodeGen-MCP.svg)](https://pkg.go.dev/github.com/AltairaLabs/CodeGen-MCP)
+
+<!-- License & Status Badges -->
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
+[![Go Version](https://img.shields.io/badge/Go-1.25+-00ADD8.svg)](https://go.dev/dl/)
 [![Status](https://img.shields.io/badge/status-early--stage-orange)]()
+
 
 ---
 
