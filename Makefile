@@ -37,6 +37,12 @@ test: ## Run all tests
 	@echo "Running tests..."
 	@go test -v ./...
 
+test-unit: ## Run unit tests with coverage for SonarQube
+	@echo "Running unit tests with coverage..."
+	@go test -coverprofile=coverage.out -covermode=atomic ./...
+	@go tool cover -func=coverage.out | grep "^total:" || echo "No coverage data"
+	@echo "Coverage report generated: coverage.out"
+
 test-race: ## Run tests with race detector
 	@echo "Testing with race detector..."
 	@go test -race -v ./... 2>&1 | tee race-test.log; \
