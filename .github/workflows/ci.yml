@@ -58,7 +58,7 @@ jobs:
       uses: golangci/golangci-lint-action@v7
       with:
         version: v2.6.0
-        args: --issues-exit-code=0 --out-format=json:golangci-lint-report.json,colored-line-number
+        args: --issues-exit-code=0 --output.json.path=golangci-lint-report.json
         only-new-issues: true
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
