@@ -68,6 +68,8 @@ func (wr *WorkerRegistry) GetWorker(workerID string) *RegisteredWorker {
 }
 
 // UpdateHeartbeat updates worker heartbeat and capacity information
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (wr *WorkerRegistry) UpdateHeartbeat(workerID string, status *protov1.WorkerStatus, capacity *protov1.SessionCapacity) error {
 	wr.mu.RLock()
 	worker, exists := wr.workers[workerID]
@@ -88,6 +90,8 @@ func (wr *WorkerRegistry) UpdateHeartbeat(workerID string, status *protov1.Worke
 }
 
 // FindWorkerWithCapacity finds a worker with available session capacity
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (wr *WorkerRegistry) FindWorkerWithCapacity(ctx context.Context, config *protov1.SessionConfig) (*RegisteredWorker, error) {
 	wr.mu.RLock()
 	defer wr.mu.RUnlock()

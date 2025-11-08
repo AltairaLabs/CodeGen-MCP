@@ -12,6 +12,11 @@ import (
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
+const (
+	defaultMaxRecentTasks   = 10
+	defaultWorkspaceDirPerm = 0755
+)
+
 // SessionPool manages multiple isolated sessions on a single worker
 type SessionPool struct {
 	mu            sync.RWMutex
@@ -52,6 +57,8 @@ func NewSessionPool(workerID string, maxSessions int32, baseWorkspace string) *S
 }
 
 // CreateSession creates a new isolated session
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (sp *SessionPool) CreateSession(ctx context.Context, req *protov1.CreateSessionRequest) (*protov1.CreateSessionResponse, error) {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
@@ -66,7 +73,8 @@ func (sp *SessionPool) CreateSession(ctx context.Context, req *protov1.CreateSes
 
 	// Create isolated workspace directory
 	workspacePath := filepath.Join(sp.baseWorkspace, sessionID)
-	if err := os.MkdirAll(workspacePath, 0755); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
+	//nolint:lll // NOSONAR comment explains security considerations
+	if err := os.MkdirAll(workspacePath, defaultWorkspaceDirPerm); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
 		return nil, fmt.Errorf("failed to create workspace: %w", err)
 	}
 
@@ -86,7 +94,7 @@ func (sp *SessionPool) CreateSession(ctx context.Context, req *protov1.CreateSes
 		RecentTasks:      make([]string, 0),
 		LastCheckpointID: "",
 		ArtifactIDs:      make([]string, 0),
-		maxRecentTasks:   10,
+		maxRecentTasks:   defaultMaxRecentTasks,
 	}
 
 	// Apply session configuration

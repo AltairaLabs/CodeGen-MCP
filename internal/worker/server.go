@@ -35,11 +35,15 @@ func NewWorkerServer(workerID string, maxSessions int32, baseWorkspace string) *
 }
 
 // CreateSession implements SessionManagement.CreateSession
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (ws *WorkerServer) CreateSession(ctx context.Context, req *protov1.CreateSessionRequest) (*protov1.CreateSessionResponse, error) {
 	return ws.sessionPool.CreateSession(ctx, req)
 }
 
 // DestroySession implements SessionManagement.DestroySession
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (ws *WorkerServer) DestroySession(ctx context.Context, req *protov1.DestroySessionRequest) (*protov1.DestroySessionResponse, error) {
 	var checkpointID string
 	var err error
@@ -75,16 +79,22 @@ func (ws *WorkerServer) DestroySession(ctx context.Context, req *protov1.Destroy
 }
 
 // CheckpointSession implements SessionManagement.CheckpointSession
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (ws *WorkerServer) CheckpointSession(ctx context.Context, req *protov1.CheckpointRequest) (*protov1.CheckpointResponse, error) {
 	return ws.checkpointer.Checkpoint(ctx, req)
 }
 
 // RestoreSession implements SessionManagement.RestoreSession
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (ws *WorkerServer) RestoreSession(ctx context.Context, req *protov1.RestoreRequest) (*protov1.RestoreResponse, error) {
 	return ws.checkpointer.Restore(ctx, req)
 }
 
 // GetSessionStatus implements SessionManagement.GetSessionStatus
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (ws *WorkerServer) GetSessionStatus(ctx context.Context, req *protov1.SessionStatusRequest) (*protov1.SessionStatusResponse, error) {
 	session, err := ws.sessionPool.GetSession(req.SessionId)
 	if err != nil {
@@ -125,6 +135,8 @@ func (ws *WorkerServer) CancelTask(ctx context.Context, req *protov1.CancelReque
 }
 
 // GetTaskStatus implements TaskExecution.GetTaskStatus
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (ws *WorkerServer) GetTaskStatus(ctx context.Context, req *protov1.StatusRequest) (*protov1.StatusResponse, error) {
 	return ws.taskExecutor.GetStatus(ctx, req)
 }
@@ -145,6 +157,8 @@ func (ws *WorkerServer) GetUploadURL(ctx context.Context, req *protov1.UploadReq
 }
 
 // RecordArtifact implements ArtifactService.RecordArtifact
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (ws *WorkerServer) RecordArtifact(ctx context.Context, req *protov1.ArtifactMetadata) (*protov1.ArtifactResponse, error) {
 	// Store artifact metadata in session (get session ID from task ID prefix)
 	// For now, we'll need the session ID passed separately or tracked via task

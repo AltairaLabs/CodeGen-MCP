@@ -9,6 +9,11 @@ import (
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
+const (
+	progressStarting  = 10
+	progressCompleted = 100
+)
+
 // TaskExecutor handles task execution within sessions
 type TaskExecutor struct {
 	sessionPool *SessionPool
@@ -36,6 +41,8 @@ func NewTaskExecutor(sessionPool *SessionPool) *TaskExecutor {
 }
 
 // Execute executes a task and streams results
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (te *TaskExecutor) Execute(ctx context.Context, req *protov1.TaskRequest, stream protov1.TaskExecution_ExecuteTaskServer) error {
 	// Get session
 	session, err := te.sessionPool.GetSession(req.SessionId)
@@ -178,13 +185,15 @@ func (te *TaskExecutor) GetStatus(ctx context.Context, req *protov1.StatusReques
 }
 
 // executeToolInSession executes a specific tool within a session
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest, stream protov1.TaskExecution_ExecuteTaskServer) (*protov1.TaskResult, error) {
 	// Send progress update
 	_ = stream.Send(&protov1.TaskResponse{
 		TaskId: req.TaskId,
 		Payload: &protov1.TaskResponse_Progress{
 			Progress: &protov1.ProgressUpdate{
-				PercentComplete: 10,
+				PercentComplete: progressStarting,
 				Stage:           "starting",
 				Message:         fmt.Sprintf("Executing %s", req.ToolName),
 			},
@@ -234,7 +243,7 @@ func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *Worke
 		TaskId: req.TaskId,
 		Payload: &protov1.TaskResponse_Progress{
 			Progress: &protov1.ProgressUpdate{
-				PercentComplete: 100,
+				PercentComplete: progressCompleted,
 				Stage:           "completed",
 				Message:         "Task completed successfully",
 			},

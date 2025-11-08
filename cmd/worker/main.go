@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -13,14 +14,33 @@ import (
 	"google.golang.org/grpc"
 )
 
+const (
+	defaultMaxSessions    = 5
+	defaultWorkspacePerms = 0755
+	defaultGRPCPort       = "50051"
+	defaultWorkerID       = "worker-1"
+	defaultBaseWorkspace  = "/tmp/codegen-workspaces"
+)
+
+var (
+	version = flag.Bool("version", false, "Print version and exit")
+)
+
 func main() {
+	flag.Parse()
+
+	if *version {
+		fmt.Println("CodeGen MCP Worker v0.1.0")
+		os.Exit(0)
+	}
+
 	fmt.Println("⚙️ AltairaLabs CodeGen MCP Worker starting up...")
 
 	// Read configuration from environment
-	workerID := getEnv("WORKER_ID", "worker-1")
-	grpcPort := getEnv("GRPC_PORT", "50051")
-	maxSessions := getEnvInt("MAX_SESSIONS", 5)
-	baseWorkspace := getEnv("BASE_WORKSPACE", "/tmp/codegen-workspaces")
+	workerID := getEnv("WORKER_ID", defaultWorkerID)
+	grpcPort := getEnv("GRPC_PORT", defaultGRPCPort)
+	maxSessions := getEnvInt("MAX_SESSIONS", defaultMaxSessions)
+	baseWorkspace := getEnv("BASE_WORKSPACE", defaultBaseWorkspace)
 
 	log.Printf("Worker ID: %s", workerID)
 	log.Printf("gRPC Port: %s", grpcPort)
@@ -29,7 +49,7 @@ func main() {
 
 	// Create base workspace directory
 	// #nosec G301 - Base workspace directory needs to be accessible by user and group
-	if err := os.MkdirAll(baseWorkspace, 0755); err != nil {
+	if err := os.MkdirAll(baseWorkspace, defaultWorkspacePerms); err != nil {
 		log.Fatalf("Failed to create base workspace: %v", err)
 	}
 

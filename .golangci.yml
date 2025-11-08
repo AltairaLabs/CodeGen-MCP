@@ -80,6 +80,14 @@ linters:
       - text: "Error return value of.*Close.*is not checked"
         linters:
           - errcheck
+      # Exclude lll for function signatures with protobuf types (they're inherently long)
+      - text: "^func .*protov1\\."
+        linters:
+          - lll
+      # Exclude lll for comments explaining NOSONAR
+      - text: "// NOSONAR"
+        linters:
+          - lll
       # Exclude most linters from test files
       - path: '_test\.go'
         linters:

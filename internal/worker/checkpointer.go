@@ -16,8 +16,10 @@ import (
 )
 
 const (
-	checkpointExt = ".tar.gz"
-	jsonExt       = ".json"
+	checkpointExt            = ".tar.gz"
+	jsonExt                  = ".json"
+	defaultMaxCheckpoints    = 10
+	defaultCheckpointDirPerm = 0755
 )
 
 // Checkpointer handles session checkpointing and restoration
@@ -29,19 +31,23 @@ type Checkpointer struct {
 }
 
 // NewCheckpointer creates a new checkpointer
+//
+//nolint:lll // NOSONAR comment explains security considerations
 func NewCheckpointer(sessionPool *SessionPool, baseWorkspace string) *Checkpointer {
 	checkpointDir := filepath.Join(baseWorkspace, ".checkpoints")
-	_ = os.MkdirAll(checkpointDir, 0755) // NOSONAR - workspace directories need 0755 for proper file operations
+	_ = os.MkdirAll(checkpointDir, defaultCheckpointDirPerm) // NOSONAR - workspace directories need 0755 for proper file operations
 
 	return &Checkpointer{
 		sessionPool:    sessionPool,
 		baseWorkspace:  baseWorkspace,
 		checkpointDir:  checkpointDir,
-		maxCheckpoints: 10, // Keep last 10 checkpoints per session
+		maxCheckpoints: defaultMaxCheckpoints, // Keep last 10 checkpoints per session
 	}
 }
 
 // Checkpoint creates a checkpoint of a session
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (c *Checkpointer) Checkpoint(ctx context.Context, req *protov1.CheckpointRequest) (*protov1.CheckpointResponse, error) {
 	checkpointID, err := c.CreateCheckpoint(ctx, req.SessionId, req.Incremental)
 	if err != nil {

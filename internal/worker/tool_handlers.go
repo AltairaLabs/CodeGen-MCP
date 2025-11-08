@@ -14,10 +14,14 @@ import (
 )
 
 const (
-	errInvalidPath = "invalid path: %w"
+	errInvalidPath          = "invalid path: %w"
+	progressPythonExecuting = 25
+	progressPackageInstall  = 50
 )
 
 // handleEcho handles the echo tool (for testing)
+//
+//nolint:lll,unparam // Protobuf types create long signatures; ctx required for interface consistency
 func (te *TaskExecutor) handleEcho(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest) (*protov1.TaskResult, error) {
 	message, ok := req.Arguments["message"]
 	if !ok {
@@ -33,6 +37,8 @@ func (te *TaskExecutor) handleEcho(ctx context.Context, session *WorkerSession, 
 }
 
 // handleFsWrite handles the fs.write tool
+//
+//nolint:lll,unparam // Protobuf types create long signatures; ctx required for interface consistency
 func (te *TaskExecutor) handleFsWrite(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest) (*protov1.TaskResult, error) {
 	path, ok := req.Arguments["path"]
 	if !ok {
@@ -72,6 +78,8 @@ func (te *TaskExecutor) handleFsWrite(ctx context.Context, session *WorkerSessio
 }
 
 // handleFsRead handles the fs.read tool
+//
+//nolint:lll,unparam // Protobuf types create long signatures; ctx required for interface consistency
 func (te *TaskExecutor) handleFsRead(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest) (*protov1.TaskResult, error) {
 	path, ok := req.Arguments["path"]
 	if !ok {
@@ -103,6 +111,8 @@ func (te *TaskExecutor) handleFsRead(ctx context.Context, session *WorkerSession
 }
 
 // handleFsList handles the fs.list tool
+//
+//nolint:lll,unparam // Protobuf types create long signatures; ctx required for interface consistency
 func (te *TaskExecutor) handleFsList(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest) (*protov1.TaskResult, error) {
 	path, ok := req.Arguments["path"]
 	if !ok {
@@ -144,6 +154,8 @@ func (te *TaskExecutor) handleFsList(ctx context.Context, session *WorkerSession
 }
 
 // handleRunPython handles the run.python tool
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest, stream protov1.TaskExecution_ExecuteTaskServer) (*protov1.TaskResult, error) {
 	code, ok := req.Arguments["code"]
 	if !ok {
@@ -155,7 +167,7 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 		TaskId: req.TaskId,
 		Payload: &protov1.TaskResponse_Progress{
 			Progress: &protov1.ProgressUpdate{
-				PercentComplete: 25,
+				PercentComplete: progressPythonExecuting,
 				Stage:           "executing_python",
 				Message:         "Executing Python code...",
 			},
@@ -259,6 +271,8 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 }
 
 // handlePkgInstall handles the pkg.install tool
+//
+//nolint:lll // Protobuf types create inherently long function signatures
 func (te *TaskExecutor) handlePkgInstall(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest, stream protov1.TaskExecution_ExecuteTaskServer) (*protov1.TaskResult, error) {
 	requirements, ok := req.Arguments["requirements"]
 	if !ok {
@@ -270,7 +284,7 @@ func (te *TaskExecutor) handlePkgInstall(ctx context.Context, session *WorkerSes
 		TaskId: req.TaskId,
 		Payload: &protov1.TaskResponse_Progress{
 			Progress: &protov1.ProgressUpdate{
-				PercentComplete: 50,
+				PercentComplete: progressPackageInstall,
 				Stage:           "installing_packages",
 				Message:         "Installing Python packages...",
 			},
