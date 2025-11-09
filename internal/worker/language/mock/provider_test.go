@@ -336,9 +336,9 @@ func TestProvider_Name(t *testing.T) {
 
 // Helper functions
 func contains(s, substr string) bool {
-	return len(s) > 0 && (s == substr || len(substr) > 0 && len(s) >= len(substr) && 
-		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr || 
-		 len(s) > len(substr) && containsMiddle(s, substr)))
+	return len(s) > 0 && (s == substr || len(substr) > 0 && len(s) >= len(substr) &&
+		(s[:len(substr)] == substr || s[len(s)-len(substr):] == substr ||
+			len(s) > len(substr) && containsMiddle(s, substr)))
 }
 
 func containsMiddle(s, substr string) bool {

@@ -1232,6 +1232,147 @@ func TestRegistrationClient_HeartbeatFailure_TriggersReconnect(t *testing.T) {
 	}
 }
 
+// Unit tests that run in short mode (no network required)
+
+func TestRegistrationClientGetWorkerStatusIdle(t *testing.T) {
+	// Test worker status when idle (no active sessions)
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "worker-1",
+		CoordinatorAddr: "localhost:50051",
+		Version:         "1.0.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	capacity := sessionPool.GetCapacity()
+	status := client.getWorkerStatus(capacity)
+
+	if status.State != protov1.WorkerStatus_STATE_IDLE {
+		t.Errorf("Expected STATE_IDLE, got %v", status.State)
+	}
+
+	if status.ActiveTasks != 0 {
+		t.Errorf("Expected 0 active tasks, got %d", status.ActiveTasks)
+	}
+
+	if status.CurrentUsage == nil {
+		t.Fatal("CurrentUsage should not be nil")
+	}
+
+	// Verify resource usage fields are initialized
+	if status.CurrentUsage.MemoryBytes != 0 {
+		t.Errorf("Expected 0 memory bytes, got %d", status.CurrentUsage.MemoryBytes)
+	}
+
+	if status.CurrentUsage.CpuMillicores != 0 {
+		t.Errorf("Expected 0 CPU millicores, got %d", status.CurrentUsage.CpuMillicores)
+	}
+
+	if status.CurrentUsage.DiskBytes != 0 {
+		t.Errorf("Expected 0 disk bytes, got %d", status.CurrentUsage.DiskBytes)
+	}
+
+	if len(status.Errors) != 0 {
+		t.Errorf("Expected 0 errors, got %d", len(status.Errors))
+	}
+}
+
+func TestRegistrationClientGetWorkerStatusWithMultipleSessions(t *testing.T) {
+	// Test worker status calculation with multiple sessions
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "worker-1",
+		CoordinatorAddr: "localhost:50051",
+		Version:         "1.0.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	// Test with empty capacity
+	capacity := sessionPool.GetCapacity()
+	status := client.getWorkerStatus(capacity)
+
+	// Should be idle with no sessions
+	if status.State != protov1.WorkerStatus_STATE_IDLE {
+		t.Errorf("Expected STATE_IDLE with no sessions, got %v", status.State)
+	}
+
+	// Verify capacity structure
+	if capacity == nil {
+		t.Fatal("Capacity should not be nil")
+	}
+
+	if capacity.TotalSessions <= 0 {
+		t.Errorf("Expected positive total sessions, got %d", capacity.TotalSessions)
+	}
+}
+
+func TestRegistrationClientStopChanInitialized(t *testing.T) {
+	// Test that stopChan is properly initialized
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "worker-1",
+		CoordinatorAddr: "localhost:50051",
+		Version:         "1.0.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	// stopChan should be open initially
+	select {
+	case <-client.stopChan:
+		t.Error("stopChan should not be closed initially")
+	default:
+		// Expected
+	}
+}
+
+func TestRegistrationClientReconnectionDelayDefaults(t *testing.T) {
+	// Test that reconnection delays are properly initialized with defaults
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "worker-1",
+		CoordinatorAddr: "localhost:50051",
+		Version:         "1.0.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	// Test default values
+	expectedBase := 1 * time.Second
+	expectedMax := 5 * time.Minute
+
+	if client.baseReconnectDelay != expectedBase {
+		t.Errorf("Expected baseReconnectDelay %v, got %v", expectedBase, client.baseReconnectDelay)
+	}
+
+	if client.maxReconnectDelay != expectedMax {
+		t.Errorf("Expected maxReconnectDelay %v, got %v", expectedMax, client.maxReconnectDelay)
+	}
+}
+
+func TestRegistrationClientChannelsInitialized(t *testing.T) {
+	// Test that all channels are properly initialized
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "worker-1",
+		CoordinatorAddr: "localhost:50051",
+		Version:         "1.0.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	if client.stopChan == nil {
+		t.Error("stopChan should be initialized")
+	}
+
+	if client.doneChan == nil {
+		t.Error("doneChan should be initialized")
+	}
+}
+
 func BenchmarkRegistrationClient_Heartbeat(b *testing.B) {
 	mock := &mockLifecycleServer{}
 	addr, cleanup := startMockServer(b, mock)

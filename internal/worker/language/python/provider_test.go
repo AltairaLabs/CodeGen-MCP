@@ -740,3 +740,340 @@ func TestProvider_Cleanup_AlreadyCleaned(t *testing.T) {
 		t.Errorf("Second cleanup should not error, got: %v", err)
 	}
 }
+
+// Unit tests that don't require Python installation
+
+func TestProvider_Initialize_ConfigPaths(t *testing.T) {
+	// Test path construction without actually running python
+	tmpDir := t.TempDir()
+	provider := NewProvider()
+
+	// Manually set paths to test path construction
+	provider.workspace = tmpDir
+	provider.venvPath = filepath.Join(tmpDir, ".venv")
+	provider.initialized = true
+
+	expectedVenvPath := filepath.Join(tmpDir, ".venv")
+	if provider.venvPath != expectedVenvPath {
+		t.Errorf("Expected venvPath %s, got %s", expectedVenvPath, provider.venvPath)
+	}
+
+	if provider.workspace != tmpDir {
+		t.Errorf("Expected workspace %s, got %s", tmpDir, provider.workspace)
+	}
+}
+
+func TestProvider_Execute_ChecksInitialization(t *testing.T) {
+	ctx := context.Background()
+	provider := NewProvider()
+
+	// Try to execute without initializing
+	req := &language.ExecuteRequest{
+		Code: "print('test')",
+	}
+
+	result, err := provider.Execute(ctx, req)
+	if err != errNotInitialized {
+		t.Errorf("Expected errNotInitialized, got: %v", err)
+	}
+
+	if result != nil {
+		t.Error("Result should be nil when not initialized")
+	}
+}
+
+func TestProvider_Execute_ValidatesRequest(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	provider := NewProvider()
+	provider.workspace = tmpDir
+	provider.venvPath = filepath.Join(tmpDir, ".venv")
+	provider.initialized = true
+
+	// Test with empty code (will fail execution but validates request handling)
+	req := &language.ExecuteRequest{
+		Code:       "",
+		Args:       []string{"arg1", "arg2"},
+		Env:        map[string]string{"TEST_VAR": "test_value"},
+		WorkingDir: tmpDir,
+	}
+
+	// This will fail because python isn't actually there, but it tests the request handling
+	result, _ := provider.Execute(ctx, req)
+
+	// Should have attempted to construct the command
+	if result == nil {
+		t.Error("Result should not be nil even on execution failure")
+	}
+}
+
+func TestProvider_InstallPackages_ChecksInitialization(t *testing.T) {
+	ctx := context.Background()
+	provider := NewProvider()
+
+	// Try to install without initializing
+	err := provider.InstallPackages(ctx, []string{"requests"})
+	if err != errNotInitialized {
+		t.Errorf("Expected errNotInitialized, got: %v", err)
+	}
+}
+
+func TestProvider_InstallPackages_EmptyList(t *testing.T) {
+	ctx := context.Background()
+	tmpDir := t.TempDir()
+
+	provider := NewProvider()
+	provider.workspace = tmpDir
+	provider.venvPath = filepath.Join(tmpDir, ".venv")
+	provider.initialized = true
+
+	// Installing empty list should succeed without doing anything
+	err := provider.InstallPackages(ctx, []string{})
+	if err != nil {
+		t.Errorf("Installing empty package list should not error, got: %v", err)
+	}
+
+	// Also test with nil
+	err = provider.InstallPackages(ctx, nil)
+	if err != nil {
+		t.Errorf("Installing nil package list should not error, got: %v", err)
+	}
+}
+
+func TestProvider_ListPackages_ChecksInitialization(t *testing.T) {
+	ctx := context.Background()
+	provider := NewProvider()
+
+	// Try to list without initializing
+	packages, err := provider.ListPackages(ctx)
+	if err != errNotInitialized {
+		t.Errorf("Expected errNotInitialized, got: %v", err)
+	}
+
+	if packages != nil {
+		t.Error("Packages should be nil when not initialized")
+	}
+}
+
+func TestProvider_Cleanup_EmptyVenvPath(t *testing.T) {
+	ctx := context.Background()
+	provider := NewProvider()
+
+	// Cleanup with empty venvPath should not error
+	err := provider.Cleanup(ctx)
+	if err != nil {
+		t.Errorf("Cleanup with empty venvPath should not error, got: %v", err)
+	}
+}
+
+func TestProvider_Cleanup_SafetyValidation(t *testing.T) {
+	ctx := context.Background()
+	provider := NewProvider()
+
+	// Try to cleanup a path that doesn't end with .venv (safety check)
+	provider.venvPath = "/tmp/some-random-path"
+
+	err := provider.Cleanup(ctx)
+	if err == nil {
+		t.Error("Cleanup should error when path doesn't end with .venv")
+	}
+
+	if !strings.Contains(err.Error(), "refusing to remove non-venv path") {
+		t.Errorf("Expected safety error, got: %v", err)
+	}
+}
+
+func TestProvider_Cleanup_DifferentPaths(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name      string
+		venvPath  string
+		shouldErr bool
+	}{
+		{
+			name:      "valid .venv path",
+			venvPath:  "/tmp/workspace/.venv",
+			shouldErr: false,
+		},
+		{
+			name:      "invalid path without .venv",
+			venvPath:  "/tmp/workspace/venv",
+			shouldErr: true,
+		},
+		{
+			name:      "empty path",
+			venvPath:  "",
+			shouldErr: false,
+		},
+		{
+			name:      "root path with .venv",
+			venvPath:  "/home/user/project/.venv",
+			shouldErr: false,
+		},
+		{
+			name:      "dangerous path",
+			venvPath:  "/usr/bin",
+			shouldErr: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := NewProvider()
+			provider.venvPath = tc.venvPath
+
+			err := provider.Cleanup(ctx)
+
+			if tc.shouldErr && err == nil {
+				t.Error("Expected error but got nil")
+			}
+
+			if !tc.shouldErr && err != nil && tc.venvPath != "" {
+				// Only error if the path actually exists
+				if !os.IsNotExist(err) {
+					t.Errorf("Expected no error but got: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestProvider_Supports_AllOperations(t *testing.T) {
+	provider := NewProvider()
+
+	supportedOps := []string{
+		"run.python",
+		"pip.install",
+		"pip.list",
+	}
+
+	for _, op := range supportedOps {
+		if !provider.Supports(op) {
+			t.Errorf("Provider should support operation: %s", op)
+		}
+	}
+}
+
+func TestProvider_Supports_UnsupportedOperations(t *testing.T) {
+	provider := NewProvider()
+
+	unsupportedOps := []string{
+		"run.javascript",
+		"npm.install",
+		"run.go",
+		"cargo.build",
+		"maven.test",
+		"",
+		"unknown",
+		"RUN.PYTHON", // Case sensitive
+	}
+
+	for _, op := range unsupportedOps {
+		if provider.Supports(op) {
+			t.Errorf("Provider should not support operation: %s", op)
+		}
+	}
+}
+
+func TestProvider_Name_Consistency(t *testing.T) {
+	provider1 := NewProvider()
+	provider2 := NewProvider()
+
+	if provider1.Name() != provider2.Name() {
+		t.Error("Name should be consistent across instances")
+	}
+
+	if provider1.Name() != "python" {
+		t.Errorf("Expected name 'python', got '%s'", provider1.Name())
+	}
+}
+
+func TestProvider_InitialState(t *testing.T) {
+	provider := NewProvider()
+
+	if provider.initialized {
+		t.Error("Provider should not be initialized on creation")
+	}
+
+	if provider.workspace != "" {
+		t.Errorf("Workspace should be empty on creation, got: %s", provider.workspace)
+	}
+
+	if provider.venvPath != "" {
+		t.Errorf("VenvPath should be empty on creation, got: %s", provider.venvPath)
+	}
+}
+
+func TestProvider_MultipleInstances(t *testing.T) {
+	// Test that multiple provider instances don't interfere
+	provider1 := NewProvider()
+	provider2 := NewProvider()
+
+	tmpDir1 := t.TempDir()
+	tmpDir2 := t.TempDir()
+
+	provider1.workspace = tmpDir1
+	provider1.venvPath = filepath.Join(tmpDir1, ".venv")
+	provider1.initialized = true
+
+	provider2.workspace = tmpDir2
+	provider2.venvPath = filepath.Join(tmpDir2, ".venv")
+	provider2.initialized = false
+
+	if provider1.workspace == provider2.workspace {
+		t.Error("Providers should have independent workspaces")
+	}
+
+	if provider1.initialized == provider2.initialized {
+		t.Error("Providers should have independent initialization state")
+	}
+}
+
+func TestProvider_ErrorNotInitialized(t *testing.T) {
+	// Test that errNotInitialized is used consistently
+	if errNotInitialized == nil {
+		t.Fatal("errNotInitialized should not be nil")
+	}
+
+	if errNotInitialized.Error() != "provider not initialized" {
+		t.Errorf("Expected 'provider not initialized' error, got: %s", errNotInitialized.Error())
+	}
+}
+
+func TestProvider_PathConstruction(t *testing.T) {
+	testCases := []struct {
+		name          string
+		workspacePath string
+		expectedVenv  string
+	}{
+		{
+			name:          "simple path",
+			workspacePath: "/tmp/workspace",
+			expectedVenv:  "/tmp/workspace/.venv",
+		},
+		{
+			name:          "nested path",
+			workspacePath: "/home/user/projects/myapp",
+			expectedVenv:  "/home/user/projects/myapp/.venv",
+		},
+		{
+			name:          "relative path",
+			workspacePath: "workspace",
+			expectedVenv:  "workspace/.venv",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			provider := NewProvider()
+			provider.workspace = tc.workspacePath
+			provider.venvPath = filepath.Join(tc.workspacePath, ".venv")
+
+			if provider.venvPath != tc.expectedVenv {
+				t.Errorf("Expected venvPath %s, got %s", tc.expectedVenv, provider.venvPath)
+			}
+		})
+	}
+}

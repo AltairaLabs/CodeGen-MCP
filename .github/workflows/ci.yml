@@ -32,7 +32,7 @@ jobs:
       run: make install
     
     - name: Run tests with coverage
-      run: make test-unit
+      run: make coverage
     
     - name: Generate coverage summary
       run: |

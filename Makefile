@@ -44,6 +44,7 @@ test: ## Run all tests
 
 test-unit: ## Run fast unit tests (skips network integration tests)
 	@echo "Running unit tests with coverage (excluding network integration tests)..."
+	@echo "Note: This skips integration tests that require network/gRPC. Use 'make coverage' for full coverage."
 	@go test -short -coverprofile=coverage.out -covermode=atomic \
 		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
 		$$(go list ./... | grep -v '/api/proto/v1$$')
