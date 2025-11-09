@@ -65,6 +65,45 @@ async def run_e2e_test():
                         print(f"   ❌ {tool} - MISSING!")
                         sys.exit(1)
                 
+                # Phase 2.5: Check worker availability
+                print("\n🔍 Phase 2.5: Checking worker availability...")
+                try:
+                    # Try the echo tool first (doesn't need worker)
+                    echo_check = await session.call_tool(
+                        "echo",
+                        arguments={"message": "pre-flight check"}
+                    )
+                    print("   ✅ Echo tool works (coordinator responsive)")
+                    
+                    # Now try a worker-dependent tool to verify workers are available
+                    # Using fs.list with empty path as a lightweight check
+                    worker_check = await session.call_tool(
+                        "fs.list",
+                        arguments={"path": ""}
+                    )
+                    print("   ✅ Workers available and responding")
+                except Exception as worker_error:
+                    error_msg = str(worker_error)
+                    if "no workers available" in error_msg.lower():
+                        print("\n" + "=" * 70)
+                        print("❌ NO WORKERS AVAILABLE")
+                        print("=" * 70)
+                        print("\n⚠️  The coordinator is running but no workers are registered.")
+                        print("\n💡 To fix this:")
+                        print("   1. Check if worker processes are running:")
+                        print("      docker compose ps")
+                        print("   2. Start workers if needed:")
+                        print("      docker compose up -d worker-1 worker-2")
+                        print("   3. Check worker logs:")
+                        print("      docker compose logs worker-1")
+                        print("   4. Verify workers registered:")
+                        print("      curl http://localhost:8080/health")
+                        print("\n" + "=" * 70)
+                        sys.exit(1)
+                    else:
+                        # Some other error, re-raise it
+                        raise
+                
                 # Phase 3: Write hello world
                 print("\n✍️  Phase 3: Writing hello.py...")
                 hello_code = """print('Hello from CodeGen-MCP!')

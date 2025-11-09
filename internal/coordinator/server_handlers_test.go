@@ -99,8 +99,9 @@ func TestHandleEcho_MissingMessage(t *testing.T) {
 
 // Test handleFsRead directly
 func TestHandleFsRead(t *testing.T) {
+	registry := NewWorkerRegistry()
 	storage := newTestSessionStorage()
-	sm := NewSessionManager(storage, nil)
+	sm := NewSessionManager(storage, registry)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -111,6 +112,22 @@ func TestHandleFsRead(t *testing.T) {
 	}
 
 	server := NewMCPServer(cfg, sm, worker, audit)
+
+	// Register a mock worker with capacity
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-read", "user1", "workspace1")
 	ctx := context.WithValue(context.Background(), "session_id", session.ID)
@@ -228,8 +245,9 @@ func TestHandleFsRead_PathTraversal(t *testing.T) {
 
 // Test handleFsWrite directly
 func TestHandleFsWrite(t *testing.T) {
+	registry := NewWorkerRegistry()
 	storage := newTestSessionStorage()
-	sm := NewSessionManager(storage, nil)
+	sm := NewSessionManager(storage, registry)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -240,6 +258,22 @@ func TestHandleFsWrite(t *testing.T) {
 	}
 
 	server := NewMCPServer(cfg, sm, worker, audit)
+
+	// Register a mock worker with capacity
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-write", "user1", "workspace1")
 	ctx := context.WithValue(context.Background(), "session_id", session.ID)

@@ -158,9 +158,27 @@ func (te *TaskExecutor) handleFsList(ctx context.Context, session *WorkerSession
 //
 //nolint:lll // Protobuf types create inherently long function signatures
 func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest, stream protov1.TaskExecution_ExecuteTaskServer) (*protov1.TaskResult, error) {
-	code, ok := req.Arguments["code"]
-	if !ok {
-		return nil, fmt.Errorf("missing required argument: code")
+	// Get code or file parameter
+	code, hasCode := req.Arguments["code"]
+	file, hasFile := req.Arguments["file"]
+	
+	if !hasCode && !hasFile {
+		return nil, fmt.Errorf("missing required argument: code or file")
+	}
+
+	// If file is provided, read it to get the code
+	if hasFile && !hasCode {
+		filePath := filepath.Join(session.WorkspacePath, file)
+		content, err := os.ReadFile(filePath)
+		if err != nil {
+			return &protov1.TaskResult{
+				Status: protov1.TaskResult_STATUS_FAILURE,
+				Outputs: map[string]string{
+					"error": fmt.Sprintf("failed to read file %s: %v", file, err),
+				},
+			}, nil
+		}
+		code = string(content)
 	}
 
 	// Check if provider supports Python execution

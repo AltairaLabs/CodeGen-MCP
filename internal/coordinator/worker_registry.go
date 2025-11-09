@@ -140,11 +140,13 @@ func (wr *WorkerRegistry) FindWorkerWithCapacity(ctx context.Context, config *pr
 	for _, worker := range wr.workers {
 		worker.mu.RLock()
 
-		// Check if worker is healthy
-		if worker.Status.State != protov1.WorkerStatus_STATE_IDLE &&
-			worker.Status.State != protov1.WorkerStatus_STATE_BUSY {
-			worker.mu.RUnlock()
-			continue
+		// Check if worker status is initialized and healthy (if status exists)
+		if worker.Status != nil {
+			if worker.Status.State != protov1.WorkerStatus_STATE_IDLE &&
+				worker.Status.State != protov1.WorkerStatus_STATE_BUSY {
+				worker.mu.RUnlock()
+				continue
+			}
 		}
 
 		// Check if heartbeat is recent (within 2x interval)
@@ -153,10 +155,18 @@ func (wr *WorkerRegistry) FindWorkerWithCapacity(ctx context.Context, config *pr
 			continue
 		}
 
-		// Check capacity
-		if worker.Capacity != nil && worker.Capacity.AvailableSessions > 0 {
-			if worker.Capacity.AvailableSessions > maxAvailable {
-				maxAvailable = worker.Capacity.AvailableSessions
+		// Check capacity - use runtime Capacity if available, otherwise fall back to Capabilities
+		var availableSessions int32
+		if worker.Capacity != nil {
+			availableSessions = worker.Capacity.AvailableSessions
+		} else if worker.Capabilities != nil {
+			// Worker just registered, hasn't sent heartbeat yet - use max capacity
+			availableSessions = worker.Capabilities.MaxSessions
+		}
+
+		if availableSessions > 0 {
+			if availableSessions > maxAvailable {
+				maxAvailable = availableSessions
 				bestWorker = worker
 			}
 		}

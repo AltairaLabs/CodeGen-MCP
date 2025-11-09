@@ -21,7 +21,8 @@ const (
 	toolPkgInstall = "pkg.install"
 
 	// Error messages
-	errSessionError = "session error: %v"
+	errSessionError   = "session error: %v"
+	errNoWorkersAvail = "no workers available to handle request"
 )
 
 // sessionIDKey is the context key for session ID
@@ -139,13 +140,28 @@ func (ms *MCPServer) registerTools() {
 
 // handleEcho implements the echo tool
 func (ms *MCPServer) handleEcho(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error("PANIC in handleEcho",
+				"panic", r,
+				"session_manager_nil", ms.sessionManager == nil,
+				"worker_client_nil", ms.workerClient == nil,
+				"audit_logger_nil", ms.auditLogger == nil,
+				"session_manager_registry_nil", ms.sessionManager != nil && ms.sessionManager.workerRegistry == nil,
+			)
+			panic(r) // re-panic so mcp-go can handle it
+		}
+	}()
+
 	message, err := request.RequireString("message")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	slog.Info("handleEcho: before getOrCreateSession")
 	// Get or create session
 	session, err := ms.getOrCreateSession(ctx)
+	slog.Info("handleEcho: after getOrCreateSession", "error", err, "session_nil", session == nil)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
 	}
@@ -185,6 +201,11 @@ func (ms *MCPServer) handleEcho(ctx context.Context, request mcp.CallToolRequest
 
 // handleFsRead implements the fs.read tool
 func (ms *MCPServer) handleFsRead(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Check if workers are available before attempting to create session
+	if !ms.hasWorkersAvailable() {
+		return mcp.NewToolResultError(errNoWorkersAvail), nil
+	}
+
 	path, err := request.RequireString("path")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -232,6 +253,11 @@ func (ms *MCPServer) handleFsRead(ctx context.Context, request mcp.CallToolReque
 
 // handleFsWrite implements the fs.write tool
 func (ms *MCPServer) handleFsWrite(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Check if workers are available before attempting to create session
+	if !ms.hasWorkersAvailable() {
+		return mcp.NewToolResultError(errNoWorkersAvail), nil
+	}
+
 	path, err := request.RequireString("path")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -318,6 +344,15 @@ func (ms *MCPServer) getSessionID(ctx context.Context) string {
 	return sessionID
 }
 
+// hasWorkersAvailable checks if any workers are available to handle requests
+func (ms *MCPServer) hasWorkersAvailable() bool {
+	if ms.sessionManager == nil || ms.sessionManager.workerRegistry == nil {
+		return false
+	}
+	_, _, available := ms.sessionManager.workerRegistry.GetTotalCapacity()
+	return available > 0
+}
+
 // getOrCreateSession retrieves an existing session or creates a new one with worker assignment
 func (ms *MCPServer) getOrCreateSession(ctx context.Context) (*Session, error) {
 	sessionID := ms.getSessionID(ctx)
@@ -391,6 +426,11 @@ func (ms *MCPServer) ServeHTTPWithLogger(addr string, logger *slog.Logger) error
 
 // handleFsList implements the fs.list tool
 func (ms *MCPServer) handleFsList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Check if workers are available before attempting to create session
+	if !ms.hasWorkersAvailable() {
+		return mcp.NewToolResultError(errNoWorkersAvail), nil
+	}
+
 	// Path is optional, defaults to root
 	path := request.GetString("path", "")
 
@@ -439,6 +479,11 @@ func (ms *MCPServer) handleFsList(ctx context.Context, request mcp.CallToolReque
 
 // handleRunPython implements the run.python tool
 func (ms *MCPServer) handleRunPython(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Check if workers are available before attempting to create session
+	if !ms.hasWorkersAvailable() {
+		return mcp.NewToolResultError(errNoWorkersAvail), nil
+	}
+
 	// Get optional code and file parameters
 	code := request.GetString("code", "")
 	file := request.GetString("file", "")
@@ -506,6 +551,11 @@ func (ms *MCPServer) handleRunPython(ctx context.Context, request mcp.CallToolRe
 
 // handlePkgInstall implements the pkg.install tool
 func (ms *MCPServer) handlePkgInstall(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// Check if workers are available before attempting to create session
+	if !ms.hasWorkersAvailable() {
+		return mcp.NewToolResultError(errNoWorkersAvail), nil
+	}
+
 	packages, err := request.RequireString("packages")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil

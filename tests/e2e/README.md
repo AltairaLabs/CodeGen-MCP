@@ -104,23 +104,175 @@ kill $COORDINATOR_PID
 
 ## Troubleshooting
 
-**Connection refused errors:**
+### Common Issues
+
+#### 1. Test Timeout / ReadTimeout Error
+
+**Symptoms:**
+```
+httpx.ReadTimeout: The read operation timed out
+```
+
+**Cause:** Coordinator is running but no workers are registered to handle tasks.
+
+**Solution:**
+```bash
+# Check if workers are running
+docker compose ps
+
+# Should show coordinator, worker-1, worker-2 all "Up"
+# If workers are missing, start them:
+docker compose up -d
+
+# Verify workers registered (wait ~5 seconds after start)
+curl http://localhost:8080/health
+
+# Check worker logs for registration messages
+docker compose logs worker-1 | grep -i "register"
+docker compose logs coordinator | grep -i "worker registered"
+```
+
+The e2e test now includes a pre-flight check (Phase 2.5) that detects missing workers immediately instead of timing out.
+
+#### 2. Connection Refused Errors
+
+**Symptoms:**
+```
+ConnectionRefusedError: [Errno 61] Connection refused
+```
+
+**Cause:** Coordinator is not running or running on different port.
+
+**Solution:**
 ```bash
 # Check if coordinator is running
 docker compose ps
 curl http://localhost:8080/mcp/sse  # Should return SSE stream
+
+# If not running, start services
+docker compose up -d
+
+# Check coordinator logs
+docker compose logs coordinator
 ```
 
-**No workers available:**
+#### 3. Port Already In Use
+
+**Symptoms:**
+```
+Error starting userland proxy: listen tcp4 0.0.0.0:8080: bind: address already in use
+```
+
+**Cause:** Another process (possibly a local coordinator) is using port 8080.
+
+**Solution:**
 ```bash
-# Check worker logs
-docker compose logs worker-1
-docker compose logs coordinator | grep "Worker registered"
+# Find process using port 8080
+lsof -i :8080
+
+# Option 1: Stop the conflicting process
+kill <PID>
+
+# Option 2: Change Docker Compose port
+# Edit docker-compose.yml, change "8080:8080" to "8081:8080"
 ```
 
-**Python import errors:**
+#### 4. No Workers Available
+
+**Symptoms:**
+```
+❌ NO WORKERS AVAILABLE
+⚠️  The coordinator is running but no workers are registered.
+```
+
+**Cause:** Worker processes haven't started or failed to register.
+
+**Diagnosis:**
+```bash
+# 1. Check worker container status
+docker compose ps worker-1 worker-2
+
+# 2. Check worker logs for errors
+docker compose logs worker-1 --tail=50
+
+# 3. Verify network connectivity (workers should reach coordinator)
+docker compose exec worker-1 ping coordinator
+
+# 4. Check if workers are healthy
+curl http://localhost:8080/health
+# Should show registered workers with capacity
+
+# 5. Verify gRPC port is accessible (workers use this)
+docker compose logs coordinator | grep "Lifecycle gRPC server"
+```
+
+**Common Worker Issues:**
+- **Build failed:** Run `docker compose build worker-1`
+- **Registration timeout:** Increase `COORDINATOR_TIMEOUT` in docker-compose.yml
+- **Port conflict:** Check if port 50051 (gRPC) is available
+- **Network issues:** Run `docker network inspect codegen-mcp_default`
+
+#### 5. Python Import Errors
+
+**Symptoms:**
+```
+❌ Error: MCP SDK not installed
+ImportError: cannot import name 'ClientSession'
+```
+
+**Solution:**
 ```bash
 # Reinstall test dependencies
 make clean-e2e
 make setup-e2e-tests
+
+# Or manually:
+cd tests/e2e
+python -m venv venv
+source venv/bin/activate
+pip install mcp
+```
+
+### Debugging Tips
+
+**Enable Verbose Logging:**
+```bash
+# Set log level for coordinator
+docker compose up -d
+docker compose logs -f coordinator
+
+# For more detail, edit docker-compose.yml:
+# Add: LOG_LEVEL=debug
+```
+
+**Manual Tool Testing:**
+```bash
+# Test echo tool (doesn't require workers)
+curl -X POST http://localhost:8080/mcp/tools/call \
+  -H "Content-Type: application/json" \
+  -d '{"name": "echo", "arguments": {"message": "test"}}'
+
+# Test fs.list (requires workers)
+curl -X POST http://localhost:8080/mcp/tools/call \
+  -H "Content-Type: application/json" \
+  -d '{"name": "fs.list", "arguments": {"path": ""}}'
+  
+# Should return error if no workers:
+# {"error": "no workers available to handle request"}
+```
+
+**Check Worker Capacity:**
+```bash
+# Workers should report capacity in health endpoint
+curl http://localhost:8080/health | jq '.workers'
+
+# Expected output:
+# {
+#   "total": 2,
+#   "healthy": 2,
+#   "capacity": {
+#     "total": 10,
+#     "available": 10
+#   }
+# }
 ```

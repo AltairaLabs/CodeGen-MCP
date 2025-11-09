@@ -76,7 +76,7 @@ func (cs *CoordinatorServer) RegisterWorker(
 	cs.logger.Info("Registering worker without task stream (will be established via TaskStream RPC)",
 		"worker_id", req.WorkerId)
 
-	// Register the worker
+	// Register the worker with initial status
 	worker := &RegisteredWorker{
 		WorkerID:              req.WorkerId,
 		SessionID:             sessionID,
@@ -85,11 +85,18 @@ func (cs *CoordinatorServer) RegisterWorker(
 		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
 		Capabilities:          req.Capabilities,
 		Limits:                req.Limits,
-		Status:                nil, // Will be updated on first heartbeat
-		Capacity:              nil, // Will be updated on first heartbeat
-		LastHeartbeat:         time.Now(),
-		RegisteredAt:          time.Now(),
-		HeartbeatInterval:     heartbeatInterval,
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     req.Capabilities.GetMaxSessions(),
+			ActiveSessions:    0,
+			AvailableSessions: req.Capabilities.GetMaxSessions(),
+		},
+		LastHeartbeat:     time.Now(),
+		RegisteredAt:      time.Now(),
+		HeartbeatInterval: heartbeatInterval,
 	}
 
 	if err := cs.workerRegistry.RegisterWorker(req.WorkerId, worker); err != nil {
