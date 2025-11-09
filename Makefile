@@ -1,6 +1,8 @@
 # AltairaLabs CodeGen MCP Makefile
 
-.PHONY: help build build-coordinator build-worker test test-race lint coverage clean install run-coordinator run-worker proto
+.PHONY: help build build-coordinator build-worker test test-race lint coverage clean install run-coordinator run-worker proto \
+	docker-build docker-build-coordinator docker-build-worker docker-up docker-up-dev docker-down docker-down-dev \
+	docker-logs docker-ps docker-clean docker-shell-coordinator docker-shell-worker docker-test
 
 help: ## Show this help message
 	@echo 'Usage: make [target]'
@@ -125,3 +127,110 @@ clean: ## Clean build artifacts
 	@rm -f coverage.out
 	@rm -f race-test.log
 	@echo "Cleaned build artifacts"
+
+###########################################
+# Docker Targets
+###########################################
+
+docker-build: ## Build Docker images for coordinator and worker
+	@echo "Building Docker images..."
+	docker compose build
+
+docker-build-coordinator: ## Build coordinator Docker image only
+	@echo "Building coordinator image..."
+	docker compose build coordinator
+
+docker-build-worker: ## Build worker Docker image only
+	@echo "Building worker image..."
+	docker compose build worker-1
+
+docker-up: ## Start services with production compose (builds images)
+	@echo "Starting services with docker-compose.yml..."
+	@mkdir -p tmp/dev/worker-1 tmp/dev/worker-2
+	docker compose up --build -d
+	@echo ""
+	@echo "Services started!"
+	@echo "Coordinator: localhost:50051"
+	@echo "View logs: make docker-logs"
+	@echo "Stop services: make docker-down"
+
+docker-up-dev: build ## Start services with dev compose (mounts binaries)
+	@echo "Starting services with docker-compose.dev.yml..."
+	@mkdir -p tmp/dev/worker-1/{workspaces,checkpoints}
+	@mkdir -p tmp/dev/worker-2/{workspaces,checkpoints}
+	docker compose -f docker-compose.dev.yml up --build -d
+	@echo ""
+	@echo "Services started in DEV mode!"
+	@echo "Coordinator: localhost:50051"
+	@echo "Binaries mounted from ./bin/"
+	@echo "To rebuild: make build && docker compose -f docker-compose.dev.yml restart"
+	@echo "View logs: make docker-logs"
+	@echo "Stop services: make docker-down-dev"
+
+docker-up-multi: build ## Start with multiple workers (dev mode)
+	@echo "Starting services with multiple workers..."
+	@mkdir -p tmp/dev/worker-1/{workspaces,checkpoints}
+	@mkdir -p tmp/dev/worker-2/{workspaces,checkpoints}
+	docker compose -f docker-compose.dev.yml --profile multi-worker up --build -d
+	@echo ""
+	@echo "Services started with 2 workers!"
+	@echo "View logs: make docker-logs"
+
+docker-down: ## Stop and remove production containers
+	@echo "Stopping services..."
+	docker compose down
+	@echo "Services stopped"
+
+docker-down-dev: ## Stop and remove dev containers
+	@echo "Stopping dev services..."
+	docker compose -f docker-compose.dev.yml down
+	@echo "Dev services stopped"
+
+docker-logs: ## Tail logs from all services
+	docker compose -f docker-compose.dev.yml logs -f || docker compose logs -f
+
+docker-logs-coordinator: ## Tail coordinator logs only
+	docker compose -f docker-compose.dev.yml logs -f coordinator || docker compose logs -f coordinator
+
+docker-logs-worker: ## Tail worker-1 logs only
+	docker compose -f docker-compose.dev.yml logs -f worker-1 || docker compose logs -f worker-1
+
+docker-ps: ## Show running containers
+	@docker compose -f docker-compose.dev.yml ps || docker compose ps
+
+docker-restart: ## Restart all services
+	@echo "Restarting services..."
+	docker compose -f docker-compose.dev.yml restart || docker compose restart
+	@echo "Services restarted"
+
+docker-restart-worker: ## Restart worker-1 only
+	@echo "Restarting worker-1..."
+	docker compose -f docker-compose.dev.yml restart worker-1 || docker compose restart worker-1
+	@echo "Worker restarted"
+
+docker-shell-coordinator: ## Open shell in coordinator container
+	docker exec -it codegen-coordinator-dev /bin/bash || docker exec -it codegen-coordinator /bin/bash
+
+docker-shell-worker: ## Open shell in worker-1 container
+	docker exec -it codegen-worker-1-dev /bin/bash || docker exec -it codegen-worker-1 /bin/bash
+
+docker-clean: docker-down docker-down-dev ## Stop containers and clean up volumes
+	@echo "Cleaning up Docker resources..."
+	docker volume rm codegen-worker-1-workspaces codegen-worker-1-checkpoints \
+		codegen-worker-2-workspaces codegen-worker-2-checkpoints 2>/dev/null || true
+	@rm -rf tmp/dev
+	@echo "Docker cleanup complete"
+
+docker-clean-all: docker-clean ## Remove all Docker images and volumes
+	@echo "Removing Docker images..."
+	docker rmi codegen-mcp-coordinator:latest codegen-mcp-coordinator:dev \
+		codegen-mcp-worker:latest codegen-mcp-worker:dev 2>/dev/null || true
+	@echo "All Docker resources cleaned"
+
+docker-test: ## Run integration tests against Docker containers
+	@echo "Running Docker integration tests..."
+	@./scripts/test-docker-integration.sh
+
+docker-test-multi: ## Run multi-worker and multi-session tests
+	@echo "Running multi-worker tests..."
+	@./scripts/test-multi-session.sh

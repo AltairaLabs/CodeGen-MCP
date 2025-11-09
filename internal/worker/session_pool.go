@@ -279,11 +279,10 @@ func (sp *SessionPool) initializeSession(ctx context.Context, session *WorkerSes
 		}
 	}
 
-	// Initialize Python venv if language is Python
-	if session.Config != nil && session.Config.Language == "python" {
-		if err := sp.initializePythonVenv(ctx, session); err != nil {
-			return fmt.Errorf("failed to initialize Python venv: %w", err)
-		}
+	// Always initialize Python venv for session isolation
+	// This ensures each session has its own Python environment regardless of configured language
+	if err := sp.initializePythonVenv(ctx, session); err != nil {
+		return fmt.Errorf("failed to initialize Python venv: %w", err)
 	}
 
 	// Apply environment variables from session config

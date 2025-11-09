@@ -1,12 +1,28 @@
-# Multi-stage Python builder image for CodeGen-MCP (POC)
-# - Purpose: provide a reproducible, minimal environment for building, testing
-#   and packaging Python projects driven by MCP tool calls.
-# - Notes: POC-focused: pinned base, non-root user, pip cache mount support,
-#   common build/test tools installed.
+# Multi-stage builder image for CodeGen-MCP Worker
+# - Purpose: provide a reproducible environment for running the worker server
+#   with Python project building, testing, and execution capabilities.
+# - Includes: Python 3.11, Go 1.25, worker binary, build tools
 
-ARG PYTHON_VERSION=3.11.8
-ARG DEBIAN_VERSION=bookworm-slim
-FROM python:${PYTHON_VERSION}-${DEBIAN_VERSION} as base
+# Stage 1: Build the worker binary
+FROM golang:1.25-bookworm AS go-builder
+
+WORKDIR /build
+
+# Copy go.mod and go.sum for dependency caching
+COPY go.mod go.sum ./
+COPY go.work* ./
+RUN go mod download
+
+# Copy source code
+COPY api/ ./api/
+COPY cmd/worker/ ./cmd/worker/
+COPY internal/ ./internal/
+
+# Build the worker binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o worker ./cmd/worker
+
+# Stage 2: Runtime image with Python and worker binary
+FROM python:3.11-slim AS base
 
 # Metadata for reproducible builds
 ARG BUILD_DATE=""
@@ -48,25 +64,42 @@ WORKDIR /home/builder/workspace
 # Install Python tooling (pip, pip-tools, tox, pytest, mypy, flake8)
 RUN python -m pip install --upgrade pip setuptools wheel
 RUN pip install \
-    pip-tools==7.13.0 \
-    tox==4.8.0 \
-    pytest==7.4.0 \
-    pytest-cov==4.0.0 \
-    mypy==1.9.0 \
-    flake8==6.0.0 \
-    build==0.11.0 \
-    twine==4.0.1
+    pip-tools \
+    tox \
+    pytest \
+    pytest-cov \
+    mypy \
+    flake8 \
+    build \
+    twine
+
+# Copy the worker binary from the go-builder stage
+COPY --from=go-builder /build/worker /usr/local/bin/worker
+RUN chmod +x /usr/local/bin/worker
 
 # Create a directory for pip cache that can be mounted from the host
 ENV PIP_CACHE_DIR=/home/builder/.cache/pip
 RUN mkdir -p ${PIP_CACHE_DIR} \
     && chown -R builder:builder /home/builder
 
+# Create workspaces directory for worker sessions
+RUN mkdir -p /home/builder/workspaces \
+    && chown -R builder:builder /home/builder/workspaces
+
 # Switch to non-root
 USER builder
 
-# Expose a simple entrypoint script that runs commands inside the workspace
-# Use bash to allow command chaining; MCP will call the container with explicit
-# commands / arguments.
-ENTRYPOINT ["/bin/bash", "-lc"]
-CMD ["echo 'Builder container ready. Run commands with: docker run -v $(pwd):/home/builder/workspace ... <image> \"<your-command>\"' && sleep infinity"]
+# Set environment variables for worker
+ENV WORKER_ID=worker-1 \
+    GRPC_PORT=50052 \
+    MAX_SESSIONS=5 \
+    BASE_WORKSPACE=/home/builder/workspaces \
+    COORDINATOR_ADDR=coordinator:50051
+
+# Expose gRPC port
+EXPOSE 50052
+
+# Default: run the worker server
+# Can be overridden for development/testing
+ENTRYPOINT ["/usr/local/bin/worker"]
+CMD []

@@ -72,6 +72,15 @@ flowchart TB
 
 ### 🛠️ Development
 
+#### 📖 **[Docker Compose Getting Started Guide](./docs/guides/docker-compose-getting-started.md)**
+
+**Complete deployment guide with:**
+- 🚀 Quick start instructions
+- 📊 Architecture diagrams  
+- ⚙️ Configuration options
+- 🧪 Testing and troubleshooting
+- 🔧 Development workflow
+
 #### Quick Start
 
 ```bash

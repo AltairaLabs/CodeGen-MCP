@@ -1,0 +1,91 @@
+# CodeGen-MCP Docker Compose - Production-like Setup
+# This configuration builds images from Dockerfiles and runs coordinator + worker(s)
+
+services:
+  # Coordinator service
+  coordinator:
+    build:
+      context: .
+      dockerfile: docker/coordinator/Dockerfile
+    image: codegen-mcp-coordinator:latest
+    container_name: codegen-coordinator
+    hostname: coordinator
+    ports:
+      - "50051:50051"  # gRPC port
+    environment:
+      - GRPC_PORT=50051
+      - LOG_LEVEL=info
+    networks:
+      - codegen-network
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # Worker service(s)
+  worker-1:
+    build:
+      context: .
+      dockerfile: docker/builder/Dockerfile
+    image: codegen-mcp-worker:latest
+    container_name: codegen-worker-1
+    hostname: worker-1
+    environment:
+      - WORKER_ID=worker-1
+      - GRPC_PORT=50052
+      - MAX_SESSIONS=5
+      - BASE_WORKSPACE=/home/builder/workspaces
+      - COORDINATOR_ADDR=coordinator:50051
+    networks:
+      - codegen-network
+    volumes:
+      - worker-1-workspaces:/home/builder/workspaces
+      - worker-1-checkpoints:/home/builder/.checkpoints
+    depends_on:
+      coordinator:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Additional worker (optional - can scale as needed)
+  worker-2:
+    build:
+      context: .
+      dockerfile: docker/builder/Dockerfile
+    image: codegen-mcp-worker:latest
+    container_name: codegen-worker-2
+    hostname: worker-2
+    environment:
+      - WORKER_ID=worker-2
+      - GRPC_PORT=50052
+      - MAX_SESSIONS=5
+      - BASE_WORKSPACE=/home/builder/workspaces
+      - COORDINATOR_ADDR=coordinator:50051
+    networks:
+      - codegen-network
+    volumes:
+      - worker-2-workspaces:/home/builder/workspaces
+      - worker-2-checkpoints:/home/builder/.checkpoints
+    depends_on:
+      coordinator:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - multi-worker  # Only start with --profile multi-worker
+
+networks:
+  codegen-network:
+    driver: bridge
+    name: codegen-network
+
+volumes:
+  worker-1-workspaces:
+    name: codegen-worker-1-workspaces
+  worker-1-checkpoints:
+    name: codegen-worker-1-checkpoints
+  worker-2-workspaces:
+    name: codegen-worker-2-workspaces
+  worker-2-checkpoints:
+    name: codegen-worker-2-checkpoints

@@ -44,6 +44,14 @@ The Builder Container provides reproducible Python execution environments.
 
 ## 🚀 Quick Start
 
+### **👉 [Docker Compose Getting Started Guide](./guides/docker-compose-getting-started.md)** 
+
+**Recommended for new users!** Comprehensive guide with:
+- Step-by-step deployment instructions
+- Architecture diagrams and configurations
+- Multi-worker setup and testing
+- Troubleshooting and performance tuning
+
 ### Local Development
 
 ```bash
@@ -64,28 +72,28 @@ make test
 make lint
 ```
 
-### Docker Deployment
+### Docker Deployment (Quick)
 
 ```bash
-# Build images
-docker build -f docker/coordinator/Dockerfile -t codegen-mcp/coordinator:latest .
-docker build -f docker/builder/Dockerfile -t codegen-mcp/worker:latest .
+# Build and start services (1 coordinator + 1 worker)
+make docker-build
+make docker-up
 
-# Run with docker-compose
-docker-compose up -d
+# Run integration tests
+make docker-test
+
+# View logs
+make docker-logs
 ```
 
-### Kubernetes Deployment
+### Multi-Worker Setup
 
 ```bash
-# Create namespace
-kubectl create namespace codegen-mcp
+# Start with 2 workers
+make docker-up-multi
 
-# Deploy coordinator
-kubectl apply -f k8s/coordinator/
-
-# Verify deployment
-kubectl get pods -n codegen-mcp
+# Test session distribution and isolation
+make docker-test-multi
 ```
 
 ## 🏗️ System Architecture
@@ -199,29 +207,27 @@ Multi-layered security approach:
 
 ## 🔍 Component Status
 
-| Component | Version | Coverage | Tests | Status |
-|-----------|---------|----------|-------|--------|
-| Coordinator | v0.1.0 | 33.2% (80%+ core) | 51 | ✅ Stable |
-| Worker | v0.1.0 | 45.7% | 11 | ✅ Stable |
-| Builder Container | - | - | - | ⏳ Planned |
-| CI/CD Pipeline | - | - | - | ✅ Active |
+| Component | Version | Status | Description |
+|-----------|---------|--------|-------------|
+| Coordinator | v0.1.0 | ✅ Stable | Central orchestrator for session and task management |
+| Worker | v0.1.0 | ✅ Stable | Python code execution with venv isolation |
+| Docker Compose | v0.1.0 | ✅ Stable | Multi-worker deployment with session distribution |
+| Integration Tests | v0.1.0 | ✅ Complete | Docker-based end-to-end testing |
+| Kubernetes | - | ⏳ Planned | Production orchestration |
 
 ## 📊 Quality Metrics
 
-### Test Coverage
+All quality metrics are tracked in SonarQube:
+- **Test Coverage**: See [SonarQube Dashboard](https://sonarcloud.io/project/overview?id=AltairaLabs_CodeGen-MCP)
+- **Code Quality**: Automated analysis on every commit
+- **Security Scanning**: gosec + SonarQube security rules
 
-- **Target:** 80%+ coverage for core business logic
-- **Current:** 
-  - Coordinator: 33.2% overall (80%+ core logic, 51 tests)
-  - Worker: 45.7% (11 tests)
-- **Integration Tests:** ✅ Full end-to-end test suite
-- **CI/CD:** Automated testing on every commit
+### CI/CD
 
-### Linting
-
-- **golangci-lint:** 24+ enabled linters
-- **Current Status:** 6 non-blocking gosec warnings (down from 15)
-- **Configuration:** `.golangci.yml`
+- **Linting**: 24+ golangci-lint rules enabled (`.golangci.yml`)
+- **Testing**: Automated unit + integration tests
+- **Coverage**: Excludes generated proto files and main.go entrypoints
+- **Integration**: Full Docker Compose e2e test suite
 
 ## 🛠️ Development
 

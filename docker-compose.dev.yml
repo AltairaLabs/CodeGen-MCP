@@ -1,0 +1,93 @@
+# CodeGen-MCP Docker Compose - Development Setup
+# This configuration mounts pre-built binaries for fast iteration
+# Workflow: make build && docker-compose -f docker-compose.dev.yml up
+
+services:
+  # Coordinator service - using pre-built binary
+  coordinator:
+    build:
+      context: .
+      dockerfile: docker/coordinator/Dockerfile
+    image: codegen-mcp-coordinator:dev
+    container_name: codegen-coordinator-dev
+    hostname: coordinator
+    ports:
+      - "50051:50051"  # gRPC port
+    environment:
+      - GRPC_PORT=50051
+      - LOG_LEVEL=debug  # More verbose logging for dev
+    networks:
+      - codegen-network
+    volumes:
+      # Mount pre-built binary for hot reload
+      - ./bin/coordinator:/app/coordinator:ro
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "50051"]
+      interval: 5s
+      timeout: 3s
+      retries: 3
+      start_period: 3s
+    restart: unless-stopped
+
+  # Worker service - using pre-built binary
+  worker-1:
+    build:
+      context: .
+      dockerfile: docker/builder/Dockerfile
+    image: codegen-mcp-worker:dev
+    container_name: codegen-worker-1-dev
+    hostname: worker-1
+    environment:
+      - WORKER_ID=worker-1-dev
+      - GRPC_PORT=50052
+      - MAX_SESSIONS=5
+      - BASE_WORKSPACE=/home/builder/workspaces
+      - COORDINATOR_ADDR=coordinator:50051
+    networks:
+      - codegen-network
+    volumes:
+      # Mount pre-built binary for hot reload
+      - ./bin/worker:/usr/local/bin/worker:ro
+      # Mount workspaces for inspection
+      - ./tmp/dev/worker-1/workspaces:/home/builder/workspaces
+      - ./tmp/dev/worker-1/checkpoints:/home/builder/.checkpoints
+    depends_on:
+      coordinator:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Additional worker for testing multi-worker scenarios
+  worker-2:
+    build:
+      context: .
+      dockerfile: docker/builder/Dockerfile
+    image: codegen-mcp-worker:dev
+    container_name: codegen-worker-2-dev
+    hostname: worker-2
+    environment:
+      - WORKER_ID=worker-2-dev
+      - GRPC_PORT=50052
+      - MAX_SESSIONS=5
+      - BASE_WORKSPACE=/home/builder/workspaces
+      - COORDINATOR_ADDR=coordinator:50051
+    networks:
+      - codegen-network
+    volumes:
+      # Mount pre-built binary for hot reload
+      - ./bin/worker:/usr/local/bin/worker:ro
+      # Mount workspaces for inspection
+      - ./tmp/dev/worker-2/workspaces:/home/builder/workspaces
+      - ./tmp/dev/worker-2/checkpoints:/home/builder/.checkpoints
+    depends_on:
+      coordinator:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles:
+      - multi-worker  # Only start with --profile multi-worker
+
+networks:
+  codegen-network:
+    driver: bridge
+    name: codegen-network-dev
+
+# Note: Using local directories instead of named volumes for easier inspection

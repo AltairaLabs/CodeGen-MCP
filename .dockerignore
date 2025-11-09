@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# Build artifacts
+bin/
+*.out
+*.log
+coverage.html
+coverage.out
+race-test.log
+
+# Test artifacts
+tmp/
+.checkpoints/
+
+# Documentation
+docs/
+*.md
+!README.md
+
+# Docker
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# CI/CD
+.github/
+sonar-project.properties
+
+# Dependencies (will be downloaded during build)
+vendor/
+
+# OS files
+.DS_Store
+Thumbs.db
