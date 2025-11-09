@@ -73,8 +73,12 @@ func main() {
 	workerServer := worker.NewWorkerServer(workerID, int32(maxSessions), baseWorkspace)
 
 	// Construct worker's gRPC address
-	// TODO: Support configurable hostname (currently assumes localhost)
-	grpcAddress := fmt.Sprintf("localhost:%s", grpcPort)
+	// Use WORKER_HOSTNAME env var if set (for Docker), otherwise localhost
+	hostname := os.Getenv("WORKER_HOSTNAME")
+	if hostname == "" {
+		hostname = "localhost"
+	}
+	grpcAddress := fmt.Sprintf("%s:%s", hostname, grpcPort)
 
 	// Create registration client
 	regClient := worker.NewRegistrationClient(&worker.RegistrationConfig{

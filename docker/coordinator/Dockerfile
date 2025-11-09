@@ -44,11 +44,12 @@ USER coordinator
 
 # Set environment variables
 ENV GRPC_PORT=50051 \
+    HTTP_PORT=8080 \
     LOG_LEVEL=info
 
-# Expose gRPC port
-EXPOSE 50051
+# Expose gRPC port for workers and HTTP port for MCP clients
+EXPOSE 50051 8080
 
-# Run the coordinator
+# Run the coordinator with HTTP mode enabled
 ENTRYPOINT ["/app/coordinator"]
-CMD []
+CMD ["--http"]

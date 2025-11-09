@@ -25,6 +25,11 @@ go.work
 *.swp
 docs/local-backlog/
 
+# Python virtual environments
+tests/e2e/venv/
+*.pyc
+__pycache__/
+
 # Docker
 *.log
 docker-compose.override.yml

@@ -1,6 +1,7 @@
 # AltairaLabs CodeGen MCP Makefile
 
 .PHONY: help build build-coordinator build-worker test test-race lint coverage clean install run-coordinator run-worker proto \
+	setup-e2e-tests test-e2e clean-e2e \
 	docker-build docker-build-coordinator docker-build-worker docker-up docker-up-dev docker-down docker-down-dev \
 	docker-logs docker-ps docker-clean docker-shell-coordinator docker-shell-worker docker-test
 
@@ -78,6 +79,39 @@ coverage: ## Generate full coverage report (includes all tests)
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 	@go tool cover -func=coverage.out | grep "^total:"
+
+setup-e2e-tests: ## Setup Python virtual environment for e2e tests
+	@echo "Setting up e2e test environment..."
+	@if [ ! -d "tests/e2e/venv" ]; then \
+		echo "Creating Python virtual environment..."; \
+		python3 -m venv tests/e2e/venv; \
+		echo "Installing dependencies..."; \
+		tests/e2e/venv/bin/pip install --upgrade pip; \
+		tests/e2e/venv/bin/pip install -r tests/e2e/requirements.txt; \
+		echo "✅ E2E test environment ready"; \
+	else \
+		echo "Virtual environment already exists"; \
+		echo "To reinstall: make clean-e2e && make setup-e2e-tests"; \
+	fi
+
+test-e2e: docker-build setup-e2e-tests ## Run end-to-end MCP tests (starts Docker services)
+	@echo "Running end-to-end MCP tests with Docker..."
+	@echo "Starting Docker services..."
+	@docker compose up -d
+	@echo "Waiting for services to be ready..."
+	@sleep 5
+	@echo "Running test..."
+	@COORDINATOR_URL="http://localhost:8080/mcp" tests/e2e/venv/bin/python tests/e2e/test_mcp.py; \
+	EXIT_CODE=$$?; \
+	echo ""; \
+	echo "Stopping Docker services..."; \
+	docker compose down; \
+	exit $$EXIT_CODE
+
+clean-e2e: ## Clean e2e test environment
+	@echo "Cleaning e2e test environment..."
+	@rm -rf tests/e2e/venv
+	@echo "E2E test environment cleaned"
 
 lint: ## Run linters
 	@echo "Running go vet..."

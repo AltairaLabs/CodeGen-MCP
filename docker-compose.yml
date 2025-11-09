@@ -11,9 +11,11 @@ services:
     container_name: codegen-coordinator
     hostname: coordinator
     ports:
-      - "50051:50051"  # gRPC port
+      - "50051:50051"  # gRPC port for workers
+      - "8080:8080"    # HTTP/SSE port for MCP clients
     environment:
       - GRPC_PORT=50051
+      - HTTP_PORT=8080
       - LOG_LEVEL=info
     networks:
       - codegen-network
@@ -35,6 +37,7 @@ services:
     hostname: worker-1
     environment:
       - WORKER_ID=worker-1
+      - WORKER_HOSTNAME=worker-1  # Hostname for gRPC address registration
       - GRPC_PORT=50052
       - MAX_SESSIONS=5
       - BASE_WORKSPACE=/home/builder/workspaces
@@ -59,6 +62,7 @@ services:
     hostname: worker-2
     environment:
       - WORKER_ID=worker-2
+      - WORKER_HOSTNAME=worker-2  # Hostname for gRPC address registration
       - GRPC_PORT=50052
       - MAX_SESSIONS=5
       - BASE_WORKSPACE=/home/builder/workspaces

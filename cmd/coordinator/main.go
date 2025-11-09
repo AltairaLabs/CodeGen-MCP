@@ -25,8 +25,9 @@ const (
 )
 
 var (
-	version = flag.Bool("version", false, "Print version and exit")
-	debug   = flag.Bool("debug", false, "Enable debug logging")
+	version  = flag.Bool("version", false, "Print version and exit")
+	debug    = flag.Bool("debug", false, "Enable debug logging")
+	httpMode = flag.Bool("http", false, "Enable HTTP/SSE transport instead of stdio")
 )
 
 func main() {
@@ -54,10 +55,18 @@ func main() {
 		grpcPort = defaultGRPCPort
 	}
 
+	// Read HTTP port from environment (for HTTP/SSE mode)
+	httpPort := os.Getenv("HTTP_PORT")
+	if httpPort == "" {
+		httpPort = "8080"
+	}
+
 	logger.Info("Starting CodeGen MCP Coordinator",
 		"version", "0.1.0",
 		"debug", *debug,
 		"grpc_port", grpcPort,
+		"http_mode", *httpMode,
+		"http_port", httpPort,
 	)
 
 	// Initialize components
@@ -110,10 +119,18 @@ func main() {
 
 	// Start MCP server in goroutine
 	go func() {
-		logger.Info("Starting MCP server on stdio")
-		if err := mcpServer.Serve(); err != nil {
-			logger.Error("MCP server error", "error", err)
-			cancel()
+		if *httpMode {
+			logger.Info("Starting MCP server with HTTP/SSE transport", "port", httpPort)
+			if err := mcpServer.ServeHTTPWithLogger(":"+httpPort, logger); err != nil {
+				logger.Error("MCP server error", "error", err)
+				cancel()
+			}
+		} else {
+			logger.Info("Starting MCP server on stdio")
+			if err := mcpServer.Serve(); err != nil {
+				logger.Error("MCP server error", "error", err)
+				cancel()
+			}
 		}
 	}()
 
