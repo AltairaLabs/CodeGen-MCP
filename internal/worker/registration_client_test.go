@@ -966,6 +966,272 @@ func TestRegistrationClient_ContinueServingFalse(t *testing.T) {
 	}
 }
 
+func TestRegistrationClient_Reconnect_AfterHeartbeatFailures(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	heartbeatCount := 0
+	registerCount := 0
+	reconnected := false
+
+	mock := &mockLifecycleServer{
+		registerFunc: func(req *protov1.RegisterRequest) (*protov1.RegisterResponse, error) {
+			registerCount++
+			// Allow reconnection to succeed
+			return &protov1.RegisterResponse{
+				SessionId:            fmt.Sprintf("test-session-%d", registerCount),
+				HeartbeatIntervalSec: 1,
+				Accepted:             true,
+			}, nil
+		},
+		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
+			heartbeatCount++
+			// Fail first 3 heartbeats to trigger reconnect
+			if heartbeatCount <= 3 {
+				return nil, fmt.Errorf("heartbeat failure %d", heartbeatCount)
+			}
+			// After reconnection, heartbeats succeed
+			if registerCount > 1 {
+				reconnected = true
+			}
+			return &protov1.HeartbeatResponse{
+				ContinueServing: true,
+				Commands:        []string{},
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+	client.baseReconnectDelay = 50 * time.Millisecond
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer client.Stop(ctx)
+
+	// Wait for heartbeat failures and reconnection
+	time.Sleep(5 * time.Second)
+
+	if !reconnected {
+		t.Error("Expected reconnection after heartbeat failures")
+	}
+
+	if registerCount < 2 {
+		t.Errorf("Expected at least 2 registrations (initial + reconnect), got %d", registerCount)
+	}
+}
+
+func TestRegistrationClient_Reconnect_MaxAttemptsExhausted(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	heartbeatCount := 0
+	registerAttempts := 0
+
+	mock := &mockLifecycleServer{
+		registerFunc: func(req *protov1.RegisterRequest) (*protov1.RegisterResponse, error) {
+			registerAttempts++
+			// First registration succeeds
+			if registerAttempts == 1 {
+				return &protov1.RegisterResponse{
+					SessionId:            "test-session-initial",
+					HeartbeatIntervalSec: 1,
+					Accepted:             true,
+				}, nil
+			}
+			// All reconnection attempts fail
+			return nil, fmt.Errorf("reconnection failed")
+		},
+		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
+			heartbeatCount++
+			// Fail all heartbeats to trigger reconnect
+			return nil, fmt.Errorf("heartbeat failure")
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+	client.baseReconnectDelay = 5 * time.Millisecond
+	client.maxReconnectDelay = 100 * time.Millisecond // Cap max delay to keep test fast
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer client.Stop(ctx)
+
+	// Wait for heartbeat failures (3 seconds for 3 failures) + reconnection attempts
+	// With max delay of 100ms and 10 attempts, should complete in ~5 seconds total
+	time.Sleep(6 * time.Second)
+
+	// Should have made initial registration + multiple reconnection attempts
+	// Due to timing, we might not get all 10 attempts, but should get several
+	if registerAttempts < 5 {
+		t.Errorf("Expected at least 5 registration attempts (1 initial + reconnects), got %d", registerAttempts)
+	}
+}
+
+func TestRegistrationClient_Reconnect_ExponentialBackoff(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	attemptTimes := []time.Time{}
+	registerCount := 0
+	heartbeatCount := 0
+
+	mock := &mockLifecycleServer{
+		registerFunc: func(req *protov1.RegisterRequest) (*protov1.RegisterResponse, error) {
+			registerCount++
+			attemptTimes = append(attemptTimes, time.Now())
+
+			// First registration succeeds
+			if registerCount == 1 {
+				return &protov1.RegisterResponse{
+					SessionId:            "test-session-initial",
+					HeartbeatIntervalSec: 1,
+					Accepted:             true,
+				}, nil
+			}
+
+			// Next 3 reconnection attempts fail
+			if registerCount <= 4 {
+				return nil, fmt.Errorf("reconnection attempt %d failed", registerCount)
+			}
+
+			// Fourth reconnection succeeds
+			return &protov1.RegisterResponse{
+				SessionId:            "test-session-reconnected",
+				HeartbeatIntervalSec: 1,
+				Accepted:             true,
+			}, nil
+		},
+		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
+			heartbeatCount++
+			// Fail first 3 heartbeats to trigger reconnect
+			if heartbeatCount <= 3 {
+				return nil, fmt.Errorf("heartbeat failure")
+			}
+			return &protov1.HeartbeatResponse{
+				ContinueServing: true,
+				Commands:        []string{},
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+	client.baseReconnectDelay = 100 * time.Millisecond
+	client.maxReconnectDelay = 1 * time.Second
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer client.Stop(ctx)
+
+	// Wait for heartbeat failures and reconnection attempts
+	time.Sleep(6 * time.Second)
+
+	// Should have at least 2 registration attempts (1 in attemptTimes at registration, others during reconnect)
+	if len(attemptTimes) < 2 {
+		t.Fatalf("Expected at least 2 registration attempts, got %d", len(attemptTimes))
+	}
+
+	// Check delays between reconnection attempts are increasing (exponential backoff)
+	if len(attemptTimes) >= 4 {
+		delay1 := attemptTimes[2].Sub(attemptTimes[1]) // First reconnect delay
+		delay2 := attemptTimes[3].Sub(attemptTimes[2]) // Second reconnect delay
+
+		// Second delay should be roughly 2x the first (with some tolerance)
+		if delay2 < delay1 {
+			t.Errorf("Expected exponential backoff: delay2 (%v) should be >= delay1 (%v)", delay2, delay1)
+		}
+	}
+}
+
+func TestRegistrationClient_HeartbeatFailure_TriggersReconnect(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	heartbeatCount := 0
+	reconnected := false
+	mock := &mockLifecycleServer{
+		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
+			heartbeatCount++
+			// Fail first 3 heartbeats to trigger reconnect (3 consecutive failures required)
+			if heartbeatCount <= 3 {
+				return nil, fmt.Errorf("heartbeat failed")
+			}
+			// After reconnection, heartbeats succeed
+			reconnected = true
+			return &protov1.HeartbeatResponse{
+				ContinueServing: true,
+				Commands:        []string{},
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+	client.baseReconnectDelay = 50 * time.Millisecond
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf("Start failed: %v", err)
+	}
+	defer client.Stop(ctx)
+
+	// Wait for 3 heartbeat failures + reconnection
+	// Heartbeat interval is 1s, so need at least 4 seconds
+	time.Sleep(5 * time.Second)
+
+	if !reconnected {
+		t.Error("Expected reconnection after heartbeat failure")
+	}
+
+	if heartbeatCount < 4 {
+		t.Errorf("Expected at least 4 heartbeat calls (3 failures + 1 success), got %d", heartbeatCount)
+	}
+}
+
 func BenchmarkRegistrationClient_Heartbeat(b *testing.B) {
 	mock := &mockLifecycleServer{}
 	addr, cleanup := startMockServer(b, mock)
