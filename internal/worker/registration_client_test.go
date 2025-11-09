@@ -614,6 +614,358 @@ func TestRegistrationClient_ReconnectionSuccess(t *testing.T) {
 	_ = client.Start(ctx)
 }
 
+func TestNewRegistrationClient(t *testing.T) {
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+
+	tests := []struct {
+		name   string
+		config *RegistrationConfig
+	}{
+		{
+			name: "with logger",
+			config: &RegistrationConfig{
+				WorkerID:        "test-worker-1",
+				GRPCAddress:     "localhost:50051",
+				CoordinatorAddr: "localhost:50050",
+				Version:         "1.0.0",
+				SessionPool:     sessionPool,
+				Logger:          slog.Default(),
+			},
+		},
+		{
+			name: "without logger",
+			config: &RegistrationConfig{
+				WorkerID:        "test-worker-2",
+				GRPCAddress:     "localhost:50052",
+				CoordinatorAddr: "localhost:50050",
+				Version:         "1.0.0",
+				SessionPool:     sessionPool,
+				Logger:          nil, // Should use default
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client := NewRegistrationClient(tt.config)
+
+			if client == nil {
+				t.Fatal("NewRegistrationClient returned nil")
+			}
+
+			if client.workerID != tt.config.WorkerID {
+				t.Errorf("Expected worker ID %s, got %s", tt.config.WorkerID, client.workerID)
+			}
+
+			if client.grpcAddress != tt.config.GRPCAddress {
+				t.Errorf("Expected gRPC address %s, got %s", tt.config.GRPCAddress, client.grpcAddress)
+			}
+
+			if client.coordinatorAddr != tt.config.CoordinatorAddr {
+				t.Errorf("Expected coordinator address %s, got %s", tt.config.CoordinatorAddr, client.coordinatorAddr)
+			}
+
+			if client.version != tt.config.Version {
+				t.Errorf("Expected version %s, got %s", tt.config.Version, client.version)
+			}
+
+			if client.logger == nil {
+				t.Error("Logger should never be nil")
+			}
+
+			if client.stopChan == nil {
+				t.Error("stopChan should be initialized")
+			}
+
+			if client.doneChan == nil {
+				t.Error("doneChan should be initialized")
+			}
+
+			if client.maxReconnectDelay == 0 {
+				t.Error("maxReconnectDelay should be set")
+			}
+
+			if client.baseReconnectDelay == 0 {
+				t.Error("baseReconnectDelay should be set")
+			}
+		})
+	}
+}
+
+func TestRegistrationClient_RegistrationRequestFields(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	var receivedReq *protov1.RegisterRequest
+	mock := &mockLifecycleServer{
+		registerFunc: func(req *protov1.RegisterRequest) (*protov1.RegisterResponse, error) {
+			receivedReq = req
+			return &protov1.RegisterResponse{
+				SessionId:            testSessionID,
+				HeartbeatIntervalSec: 1,
+				Accepted:             true,
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool(testWorkerBase, testMaxSessions, t.TempDir())
+	expectedVersion := "1.2.3"
+	expectedGRPCAddr := "localhost:50051"
+
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        testWorkerID,
+		GRPCAddress:     expectedGRPCAddr,
+		CoordinatorAddr: addr,
+		Version:         expectedVersion,
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf(errMsgFailedStart, err)
+	}
+	defer func() {
+		if err := client.Stop(ctx); err != nil {
+			t.Logf(errMsgStopError, err)
+		}
+	}()
+
+	if receivedReq == nil {
+		t.Fatal("No registration request received")
+	}
+
+	// Verify version
+	if receivedReq.Version != expectedVersion {
+		t.Errorf("Expected version %s, got %s", expectedVersion, receivedReq.Version)
+	}
+
+	// Verify gRPC address
+	if receivedReq.GrpcAddress != expectedGRPCAddr {
+		t.Errorf("Expected gRPC address %s, got %s", expectedGRPCAddr, receivedReq.GrpcAddress)
+	}
+
+	// Verify capabilities
+	if receivedReq.Capabilities == nil {
+		t.Fatal("Capabilities should not be nil")
+	}
+
+	// Verify limits
+	if receivedReq.Limits == nil {
+		t.Fatal("Limits should not be nil")
+	}
+
+	if receivedReq.Limits.MaxMemoryBytes == 0 {
+		t.Error("MaxMemoryBytes should be set")
+	}
+
+	if receivedReq.Limits.MaxCpuMillicores == 0 {
+		t.Error("MaxCpuMillicores should be set")
+	}
+
+	if receivedReq.Limits.MaxDiskBytes == 0 {
+		t.Error("MaxDiskBytes should be set")
+	}
+
+	if receivedReq.Limits.MaxConcurrentTasks == 0 {
+		t.Error("MaxConcurrentTasks should be set")
+	}
+}
+
+func TestRegistrationClient_DeregistrationFailed(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	mock := &mockLifecycleServer{
+		deregisterFunc: func(req *protov1.DeregisterRequest) (*protov1.DeregisterResponse, error) {
+			return &protov1.DeregisterResponse{
+				Acknowledged: false,
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf(errMsgFailedStart, err)
+	}
+
+	// Stop will log warning but not fail
+	if err := client.Stop(ctx); err != nil {
+		t.Errorf("Stop should not return error even if deregistration fails: %v", err)
+	}
+}
+
+func TestRegistrationClient_WorkerStatus_WithSessions(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	var lastStatus *protov1.WorkerStatus
+	mock := &mockLifecycleServer{
+		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
+			lastStatus = req.Status
+			return &protov1.HeartbeatResponse{
+				ContinueServing: true,
+				Commands:        []string{},
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+
+	// Create a session to change state
+	ctx := context.Background()
+	_, err := sessionPool.CreateSession(ctx, &protov1.CreateSessionRequest{
+		WorkspaceId: "test-workspace",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf(errMsgFailedStart, err)
+	}
+	defer func() {
+		if err := client.Stop(ctx); err != nil {
+			t.Logf(errMsgStopError, err)
+		}
+	}()
+
+	// Wait for heartbeat
+	time.Sleep(1500 * time.Millisecond)
+
+	// Verify status reflects active session
+	if lastStatus == nil {
+		t.Fatal("No status reported in heartbeat")
+	}
+
+	// With active sessions, should be BUSY
+	// State is determined by whether there are active sessions
+	if lastStatus.State != protov1.WorkerStatus_STATE_BUSY {
+		t.Errorf("Expected BUSY state with active session, got %v", lastStatus.State)
+	}
+
+	// Verify task count is 0 (session exists but no tasks running)
+	if lastStatus.ActiveTasks != 0 {
+		t.Errorf("Expected 0 active tasks, got %d", lastStatus.ActiveTasks)
+	}
+}
+
+func TestRegistrationClient_HeartbeatCommands(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	testCommands := []string{"drain", "reload_config"}
+	mock := &mockLifecycleServer{
+		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
+			return &protov1.HeartbeatResponse{
+				ContinueServing: true,
+				Commands:        testCommands,
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf(errMsgFailedStart, err)
+	}
+	defer func() {
+		if err := client.Stop(ctx); err != nil {
+			t.Logf(errMsgStopError, err)
+		}
+	}()
+
+	// Wait for heartbeat
+	time.Sleep(1500 * time.Millisecond)
+
+	// Commands are logged but not yet implemented
+	// Just verify heartbeat succeeded
+	if mock.heartbeatCalls < 1 {
+		t.Error("Expected at least one heartbeat")
+	}
+}
+
+func TestRegistrationClient_ContinueServingFalse(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
+	mock := &mockLifecycleServer{
+		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
+			return &protov1.HeartbeatResponse{
+				ContinueServing: false,
+				Commands:        []string{},
+			}, nil
+		},
+	}
+	addr, cleanup := startMockServer(t, mock)
+	defer cleanup()
+
+	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
+	client := NewRegistrationClient(&RegistrationConfig{
+		WorkerID:        "test-worker-1",
+		CoordinatorAddr: addr,
+		Version:         "0.1.0",
+		SessionPool:     sessionPool,
+		Logger:          slog.Default(),
+	})
+
+	ctx := context.Background()
+	if err := client.Start(ctx); err != nil {
+		t.Fatalf(errMsgFailedStart, err)
+	}
+	defer func() {
+		if err := client.Stop(ctx); err != nil {
+			t.Logf(errMsgStopError, err)
+		}
+	}()
+
+	// Wait for heartbeat
+	time.Sleep(1500 * time.Millisecond)
+
+	// Worker logs warning but continues (future: implement graceful shutdown)
+	if mock.heartbeatCalls < 1 {
+		t.Error("Expected at least one heartbeat")
+	}
+}
+
 func BenchmarkRegistrationClient_Heartbeat(b *testing.B) {
 	mock := &mockLifecycleServer{}
 	addr, cleanup := startMockServer(b, mock)
