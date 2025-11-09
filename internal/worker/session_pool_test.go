@@ -12,7 +12,7 @@ import (
 
 func TestNewSessionPool(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	if pool == nil {
 		t.Fatal("Expected session pool to be created")
@@ -29,7 +29,7 @@ func TestNewSessionPool(t *testing.T) {
 
 func TestSessionPool_CreateSession(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	req := &protov1.CreateSessionRequest{
 		WorkspaceId: "test-workspace",
@@ -64,7 +64,7 @@ func TestSessionPool_CreateSession(t *testing.T) {
 
 func TestSessionPool_GetSession(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	// Create a session
 	req := &protov1.CreateSessionRequest{
@@ -96,7 +96,7 @@ func TestSessionPool_GetSession(t *testing.T) {
 
 func TestSessionPool_DestroySession(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	// Create a session
 	req := &protov1.CreateSessionRequest{
@@ -130,7 +130,7 @@ func TestSessionPool_DestroySession(t *testing.T) {
 func TestSessionPool_Capacity(t *testing.T) {
 	baseWorkspace := t.TempDir()
 	maxSessions := int32(3)
-	pool := NewSessionPool("test-worker", maxSessions, baseWorkspace)
+	pool := newTestSessionPool("test-worker", maxSessions, baseWorkspace)
 
 	// Create sessions up to capacity
 	for i := 0; i < int(maxSessions); i++ {
@@ -173,7 +173,7 @@ func TestSessionPool_Capacity(t *testing.T) {
 
 func TestSessionPool_UpdateSessionActivity(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	req := &protov1.CreateSessionRequest{
 		WorkspaceId: "test-workspace",
@@ -203,7 +203,7 @@ func TestSessionPool_UpdateSessionActivity(t *testing.T) {
 
 func TestSessionPool_ActiveTasks(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	req := &protov1.CreateSessionRequest{
 		WorkspaceId: "test-workspace",
@@ -248,7 +248,7 @@ func TestSessionPool_ActiveTasks(t *testing.T) {
 
 func TestSessionPool_TaskHistory(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	req := &protov1.CreateSessionRequest{
 		WorkspaceId: "test-workspace",
@@ -283,7 +283,7 @@ func TestSessionPool_TaskHistory(t *testing.T) {
 
 func TestSessionPool_CheckpointTracking(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	req := &protov1.CreateSessionRequest{
 		WorkspaceId: "test-workspace",
@@ -309,7 +309,7 @@ func TestSessionPool_CheckpointTracking(t *testing.T) {
 
 func TestSessionPool_ArtifactTracking(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	req := &protov1.CreateSessionRequest{
 		WorkspaceId: "test-workspace",
@@ -344,7 +344,7 @@ func TestSessionPool_ArtifactTracking(t *testing.T) {
 
 func TestSessionPool_WorkspaceStructure(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 
 	req := &protov1.CreateSessionRequest{
 		WorkspaceId: "test-workspace",

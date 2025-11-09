@@ -42,11 +42,11 @@ test: ## Run all tests
 	@echo "Running tests..."
 	@go test -v ./...
 
-test-unit: ## Run unit tests with coverage for SonarQube
-	@echo "Running unit tests with coverage..."
-	@go test -coverprofile=coverage.out -covermode=atomic \
+test-unit: ## Run fast unit tests (skips network integration tests)
+	@echo "Running unit tests with coverage (excluding network integration tests)..."
+	@go test -short -coverprofile=coverage.out -covermode=atomic \
 		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
-		./...
+		$$(go list ./... | grep -v '/api/proto/v1$$')
 	@echo "Filtering coverage data (excluding generated proto files and main.go)..."
 	@grep -v -E '(\.pb\.go|cmd/.*/main\.go):' coverage.out > coverage.filtered.out || true
 	@mv coverage.filtered.out coverage.out
@@ -66,9 +66,9 @@ test-race: ## Run tests with race detector
 		exit 0; \
 	fi
 
-coverage: ## Generate coverage report
+coverage: ## Generate full coverage report (includes all tests)
 	@echo "Generating coverage report..."
-	@go test -coverprofile=coverage.out -covermode=atomic \
+	@go test -count=1 -coverprofile=coverage.out -covermode=atomic \
 		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
 		./...
 	@echo "Filtering coverage data (excluding generated proto files and main.go)..."

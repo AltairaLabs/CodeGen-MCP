@@ -55,6 +55,10 @@ func TestMCPServer_HandleEcho(t *testing.T) {
 }
 
 func TestMCPServer_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sm := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))

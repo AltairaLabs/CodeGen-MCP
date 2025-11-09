@@ -14,7 +14,7 @@ import (
 
 func TestCheckpointer_CreateCheckpoint(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	// Create a session
@@ -62,7 +62,7 @@ func TestCheckpointer_CreateCheckpoint(t *testing.T) {
 
 func TestCheckpointerRestore(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	// Create a session and checkpoint
@@ -133,7 +133,7 @@ func TestCheckpointerRestore(t *testing.T) {
 
 func TestCheckpointer_Checkpoint_WithRequest(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -166,7 +166,7 @@ func TestCheckpointer_Checkpoint_WithRequest(t *testing.T) {
 
 func TestCheckpointer_CleanupOldCheckpoints(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -194,7 +194,7 @@ func TestCheckpointer_CleanupOldCheckpoints(t *testing.T) {
 
 func TestCheckpointer_RestoreNonExistent(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	_, err := checkpointer.Restore(context.Background(), &protov1.RestoreRequest{
@@ -208,7 +208,7 @@ func TestCheckpointer_RestoreNonExistent(t *testing.T) {
 
 func TestCheckpointerArchiveExtract(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	// Create a session with some files
@@ -251,7 +251,7 @@ func TestCheckpointerArchiveExtract(t *testing.T) {
 
 func TestCheckpointerInvalidSession(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	// Try to checkpoint a non-existent session
@@ -263,7 +263,7 @@ func TestCheckpointerInvalidSession(t *testing.T) {
 
 func TestCheckpointerCheckpointAPI(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	// Create session
@@ -293,7 +293,7 @@ func TestCheckpointerCheckpointAPI(t *testing.T) {
 
 func TestCheckpointerPathTraversalProtection(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	checkpointer := NewCheckpointer(pool, baseWorkspace)
 
 	// Create a test session

@@ -929,7 +929,7 @@ List directory contents.
 
 ### Tool: run.python
 
-Execute Python code in the session's environment.
+Execute Python code in the session's environment via the language provider.
 
 **Arguments:**
 - `code` (string, required): Python code to execute
@@ -938,6 +938,11 @@ Execute Python code in the session's environment.
 - `stdout` (string): Standard output
 - `stderr` (string): Standard error
 - `exit_code` (string): Process exit code
+
+**Implementation:**
+- Delegates execution to the session's language provider
+- Python provider handles venv detection and code execution
+- Mock provider returns instant results for testing
 
 **Streaming:**
 - Sends progress updates during execution
@@ -967,7 +972,7 @@ Execute Python code in the session's environment.
 
 ### Tool: pkg.install
 
-Install Python packages via pip.
+Install Python packages via the language provider.
 
 **Arguments:**
 - `requirements` (string, required): Newline-separated package list
@@ -975,6 +980,11 @@ Install Python packages via pip.
 **Returns:**
 - `installed` (string): Comma-separated installed packages
 - `stdout` (string): Pip output
+
+**Implementation:**
+- Delegates installation to the session's language provider
+- Python provider handles venv pip detection and package installation
+- Mock provider returns instant success for testing
 
 **Streaming:**
 - Sends progress updates during installation

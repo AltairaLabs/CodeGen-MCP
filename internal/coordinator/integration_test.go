@@ -14,6 +14,10 @@ import (
 
 // TestIntegration_FullWorkflow tests the complete coordinator workflow
 func TestIntegration_FullWorkflow(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	// Setup complete coordinator stack
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
@@ -105,6 +109,10 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 
 // TestIntegration_MultipleSessionsIsolation tests workspace isolation
 func TestIntegration_MultipleSessionsIsolation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -184,6 +192,10 @@ func TestIntegration_MultipleSessionsIsolation(t *testing.T) {
 
 // TestIntegration_ConcurrentToolExecution tests concurrent tool calls
 func TestIntegration_ConcurrentToolExecution(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -269,6 +281,10 @@ func TestIntegration_ConcurrentToolExecution(t *testing.T) {
 
 // TestIntegration_SessionCleanup tests automatic session cleanup
 func TestIntegration_SessionCleanup(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -327,6 +343,10 @@ func TestIntegration_SessionCleanup(t *testing.T) {
 
 // TestIntegration_ErrorHandling tests error conditions
 func TestIntegration_ErrorHandling(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -386,6 +406,10 @@ func TestIntegration_ErrorHandling(t *testing.T) {
 
 // TestIntegration_AuditLogging tests that all operations are audited
 func TestIntegration_AuditLogging(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 
@@ -446,6 +470,10 @@ func (tw *testWriter) Write(p []byte) (n int, err error) {
 
 // TestIntegration_SessionMetadata tests session metadata functionality
 func TestIntegration_SessionMetadata(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
@@ -507,6 +535,10 @@ func TestIntegration_SessionMetadata(t *testing.T) {
 
 // TestIntegration_WorkerFailover tests handling of worker failures
 func TestIntegration_WorkerFailover(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	sessionMgr := coordinator.NewSessionManager()
 	worker := coordinator.NewMockWorkerClient()
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))

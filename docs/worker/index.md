@@ -94,40 +94,154 @@ graph TB
     
     subgraph "Worker Process"
         REG_CLIENT[Registration Client] -->|RegisterWorker| COORD
-        REG_CLIENT -->|Heartbeat 30s| COORD
+        REG_CLIENT-->|Heartbeat 30s| COORD
         REG_CLIENT -->|DeregisterWorker| COORD
         
         WORKER --> SESSION_POOL[Session Pool]
         WORKER --> TASK_EXEC[Task Executor]
         WORKER --> CHECKPOINT[Checkpointer]
         
-        SESSION_POOL --> S1[Session 1<br/>Workspace + venv]
-        SESSION_POOL --> S2[Session 2<br/>Workspace + venv]
-        SESSION_POOL --> SN[Session N<br/>Workspace + venv]
+        SESSION_POOL --> PROVIDER_FACTORY[Language Provider<br/>Factory]
+        
+        SESSION_POOL --> S1[Session 1<br/>Workspace + Provider]
+        SESSION_POOL --> S2[Session 2<br/>Workspace + Provider]
+        SESSION_POOL --> SN[Session N<br/>Workspace + Provider]
+        
+        PROVIDER_FACTORY --> PYTHON[Python Provider<br/>venv management]
+        PROVIDER_FACTORY --> MOCK[Mock Provider<br/>testing]
         
         TASK_EXEC --> TOOLS[Tool Handlers]
         TOOLS --> FS[fs.read/write/list]
-        TOOLS --> PY[run.python]
-        TOOLS --> PKG[pkg.install]
+        TOOLS --> PROVIDER[run.python via Provider]
+        TOOLS --> PKG[pkg.install via Provider]
         
         CHECKPOINT --> ARCHIVE[tar.gz Archives]
     end
+    
+    subgraph "Storage"
+        WS[Workspace<br/>Filesystem]
+        CP[Checkpoints<br/>tar.gz Archives]
+        ARTIFACTS[Artifacts<br/>Build Outputs]
+    end
+    
+    COORD -->|gRPC Calls| GRPC
+    GRPC --> SESSION
+    GRPC --> EXECUTOR
+    GRPC --> CHECKPOINT
+    
+    SESSION --> S1
+    SESSION --> S2
+    SESSION --> SN
+    
+    EXECUTOR --> TOOLS
+    TOOLS --> S1
+    TOOLS --> S2
+    TOOLS --> SN
+    
+    S1 --> WS
+    S2 --> WS
+    SN --> WS
+    
+    CHECKPOINT --> CP
+    SESSION --> ARTIFACTS
     
     style WORKER fill:#4A90E2
     style SESSION_POOL fill:#7ED321
     style TASK_EXEC fill:#F5A623
     style REG_CLIENT fill:#BD10E0
+    style PROVIDER_FACTORY fill:#9013FE
+```
+
+## Language Provider Pattern
+
+The Worker uses a **language provider pattern** to abstract language-specific runtime logic from core session management. This architectural pattern enables:
+
+- **Pluggable Language Support:** Add new language runtimes without modifying core components
+- **Testability:** Mock providers for fast unit testing without spinning up actual runtimes
+- **Performance:** Tests run in <1 second with mock providers vs 30+ seconds with real Python venv creation
+- **Separation of Concerns:** Language logic isolated in dedicated provider packages
+
+### Provider Interface
+
+All language providers implement a common interface:
+
+```go
+type Provider interface {
+    // Execute runs code in the language runtime
+    Execute(ctx context.Context, req *ExecuteRequest) (*ExecuteResult, error)
+    
+    // Initialize sets up the language environment (e.g., create venv)
+    Initialize(ctx context.Context, workspacePath string) error
+    
+    // InstallPackages installs language-specific dependencies
+    InstallPackages(ctx context.Context, requirements []string) ([]string, error)
+    
+    // ListPackages returns installed packages
+    ListPackages(ctx context.Context) ([]string, error)
+    
+    // Cleanup performs provider-specific cleanup
+    Cleanup(ctx context.Context) error
+    
+    // Supports checks if provider supports a language
+    Supports(language string) bool
+}
+```
+
+### Provider Factory
+
+The `ProviderFactory` manages provider registration and creation:
+
+```go
+// Register language providers at startup
+factory := language.NewFactory()
+factory.Register("python", python.NewProvider)
+factory.Register("mock", mock.NewProvider)
+
+// Create provider for session
+provider := factory.CreateProvider("python", workspacePath, logger)
+```
+
+### Available Providers
+
+- **Python Provider** (`internal/worker/language/python`): Manages Python venv, pip, and code execution
+- **Mock Provider** (`internal/worker/language/mock`): Instant no-op provider for testing
+
+### Session Provider Integration
+
+Each session is initialized with a provider instance:
+
+```go
+type WorkerSession struct {
+    SessionID     string
+    WorkspacePath string
+    Provider      language.Provider  // Language-specific runtime
+    // ... other fields
+}
+```
+
+Tool handlers delegate to the provider:
+
+```go
+// handleRunPython uses session provider
+func handleRunPython(ctx, session, request) TaskResult {
+    result := session.Provider.Execute(ctx, &ExecuteRequest{
+        Code:          request.Arguments["code"],
+        WorkspacePath: session.WorkspacePath,
+    })
+    return convertToTaskResult(result)
+}
 ```
 
 ## Core Features
 
 ### Session Management
 
-- **Multi-Tenant Isolation:** Each session has isolated workspace and Python venv
+- **Multi-Tenant Isolation:** Each session has isolated workspace and language provider
 - **Capacity Management:** Configurable maximum sessions per worker
 - **Activity Tracking:** Last activity timestamps and task history
 - **Resource Usage:** Memory and CPU tracking per session
 - **Automatic Cleanup:** Stale sessions removed automatically
+- **Provider Lifecycle:** Automatic provider initialization and cleanup
 
 ### Task Execution
 

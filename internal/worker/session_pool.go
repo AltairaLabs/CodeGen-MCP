@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+	"github.com/AltairaLabs/codegen-mcp/internal/worker/language"
+	"github.com/AltairaLabs/codegen-mcp/internal/worker/language/python"
 )
 
 const (
@@ -19,11 +20,12 @@ const (
 
 // SessionPool manages multiple isolated sessions on a single worker
 type SessionPool struct {
-	mu            sync.RWMutex
-	sessions      map[string]*WorkerSession
-	maxSessions   int32
-	baseWorkspace string
-	workerID      string
+	mu              sync.RWMutex
+	sessions        map[string]*WorkerSession
+	maxSessions     int32
+	baseWorkspace   string
+	workerID        string
+	providerFactory language.Factory
 }
 
 // WorkerSession represents an isolated session with its own workspace
@@ -34,6 +36,7 @@ type WorkerSession struct {
 	WorkspacePath    string // Isolated workspace directory
 	State            protov1.SessionState
 	Config           *protov1.SessionConfig
+	Provider         language.Provider // Language-specific provider
 	CreatedAt        time.Time
 	LastActivity     time.Time
 	ActiveTasks      int32
@@ -46,13 +49,37 @@ type WorkerSession struct {
 	maxRecentTasks   int
 }
 
-// NewSessionPool creates a new session pool
+// NewSessionPool creates a new session pool with default Python provider
 func NewSessionPool(workerID string, maxSessions int32, baseWorkspace string) *SessionPool {
+	// Create default registry with Python provider
+	registry := language.NewRegistry()
+	registry.Register("python", func() language.Provider {
+		return python.NewProvider()
+	})
+
 	return &SessionPool{
-		sessions:      make(map[string]*WorkerSession),
-		maxSessions:   maxSessions,
-		baseWorkspace: baseWorkspace,
-		workerID:      workerID,
+		sessions:        make(map[string]*WorkerSession),
+		maxSessions:     maxSessions,
+		baseWorkspace:   baseWorkspace,
+		workerID:        workerID,
+		providerFactory: registry,
+	}
+}
+
+// NewSessionPoolWithFactory creates a new session pool with a custom provider factory.
+// Used for testing with mock providers.
+func NewSessionPoolWithFactory(
+	workerID string,
+	maxSessions int32,
+	baseWorkspace string,
+	factory language.Factory,
+) *SessionPool {
+	return &SessionPool{
+		sessions:        make(map[string]*WorkerSession),
+		maxSessions:     maxSessions,
+		baseWorkspace:   baseWorkspace,
+		workerID:        workerID,
+		providerFactory: factory,
 	}
 }
 
@@ -138,6 +165,14 @@ func (sp *SessionPool) DestroySession(ctx context.Context, sessionID string, sav
 	}
 	delete(sp.sessions, sessionID)
 	sp.mu.Unlock()
+
+	// Clean up language provider
+	if session.Provider != nil {
+		if err := session.Provider.Cleanup(ctx); err != nil {
+			// Log error but continue with workspace cleanup
+			_ = fmt.Errorf("failed to cleanup provider: %w", err)
+		}
+	}
 
 	// Clean up workspace
 	if err := os.RemoveAll(session.WorkspacePath); err != nil {
@@ -279,47 +314,31 @@ func (sp *SessionPool) initializeSession(ctx context.Context, session *WorkerSes
 		}
 	}
 
-	// Always initialize Python venv for session isolation
-	// This ensures each session has its own Python environment regardless of configured language
-	if err := sp.initializePythonVenv(ctx, session); err != nil {
-		return fmt.Errorf("failed to initialize Python venv: %w", err)
+	// Create language-specific provider
+	lang := "python" // default language
+	if session.Config != nil && session.Config.Language != "" {
+		lang = session.Config.Language
 	}
 
-	// Apply environment variables from session config
-	// Note: These will be used when executing commands in the session
-	// They are stored in session.Config.EnvVars and applied at execution time
-
-	return nil
-}
-
-// initializePythonVenv creates a Python virtual environment for the session
-func (sp *SessionPool) initializePythonVenv(ctx context.Context, session *WorkerSession) error {
-	venvPath := filepath.Join(session.WorkspacePath, ".venv")
-
-	// Check if python3 is available
-	_, err := exec.LookPath("python3")
+	provider, err := sp.providerFactory.CreateProvider(lang)
 	if err != nil {
-		return fmt.Errorf("python3 not found in PATH: %w", err)
+		return fmt.Errorf("failed to create language provider: %w", err)
+	}
+	session.Provider = provider
+
+	// Initialize language environment
+	initConfig := language.InitConfig{
+		WorkspacePath: session.WorkspacePath,
+		SessionID:     session.SessionID,
+		EnvVars:       make(map[string]string),
 	}
 
-	// Create venv
-	//nolint:gosec // G204: python3 is system binary, venvPath is in isolated session workspace
-	cmd := exec.CommandContext(ctx, "python3", "-m", "venv", venvPath)
-	cmd.Dir = session.WorkspacePath
-
-	if output, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("failed to create venv: %w (output: %s)", err, string(output))
+	if session.Config != nil && session.Config.EnvVars != nil {
+		initConfig.EnvVars = session.Config.EnvVars
 	}
 
-	// Upgrade pip in the venv
-	pipPath := filepath.Join(venvPath, "bin", "pip")
-	//nolint:gosec // G204: pip binary is in session's isolated venv directory
-	cmd = exec.CommandContext(ctx, pipPath, "install", "--upgrade", "pip")
-	cmd.Dir = session.WorkspacePath
-
-	if output, err := cmd.CombinedOutput(); err != nil {
-		// Non-fatal - log but don't fail
-		_ = fmt.Errorf("failed to upgrade pip: %w (output: %s)", err, string(output))
+	if err := provider.Initialize(ctx, initConfig); err != nil {
+		return fmt.Errorf("failed to initialize language provider: %w", err)
 	}
 
 	return nil

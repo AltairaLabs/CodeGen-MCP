@@ -1,16 +1,14 @@
 package worker
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+	"github.com/AltairaLabs/codegen-mcp/internal/worker/language"
 )
 
 const (
@@ -165,6 +163,16 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 		return nil, fmt.Errorf("missing required argument: code")
 	}
 
+	// Check if provider supports Python execution
+	if session.Provider == nil || !session.Provider.Supports("run.python") {
+		return &protov1.TaskResult{
+			Status: protov1.TaskResult_STATUS_FAILURE,
+			Outputs: map[string]string{
+				"error": "Python execution not supported by session provider",
+			},
+		}, nil
+	}
+
 	// Send progress
 	_ = stream.Send(&protov1.TaskResponse{
 		TaskId: req.TaskId,
@@ -176,43 +184,6 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 			},
 		},
 	})
-
-	// Create temporary Python file
-	tmpFile := filepath.Join(session.WorkspacePath, fmt.Sprintf(".tmp_%d.py", time.Now().UnixNano()))
-	//nolint:gosec // G306: Temporary Python files use 0644 for execution by Python interpreter
-	if err := os.WriteFile(tmpFile, []byte(code), 0644); err != nil {
-		return &protov1.TaskResult{
-			Status: protov1.TaskResult_STATUS_FAILURE,
-			Outputs: map[string]string{
-				"error": fmt.Sprintf("failed to write Python file: %v", err),
-			},
-		}, nil
-	}
-	defer func() {
-		_ = os.Remove(tmpFile) // Best effort cleanup
-	}()
-
-	// Execute Python in venv
-	venvPython := filepath.Join(session.WorkspacePath, ".venv", "bin", "python3")
-
-	// Fall back to system python if venv doesn't exist yet
-	pythonCmd := "python3"
-	if _, err := os.Stat(venvPython); err == nil {
-		pythonCmd = venvPython
-	}
-
-	//nolint:gosec // G204: python command is either system python3 or session's venv, tmpFile is in isolated session workspace
-	cmd := exec.CommandContext(ctx, pythonCmd, tmpFile)
-	cmd.Dir = session.WorkspacePath
-
-	// Set environment variables
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("PYTHONPATH=%s", session.WorkspacePath),
-	)
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
 
 	// Send execution log
 	_ = stream.Send(&protov1.TaskResponse{
@@ -226,21 +197,14 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 		},
 	})
 
-	err := cmd.Run()
-
-	// Send output logs
-	if stdout.Len() > 0 {
-		_ = stream.Send(&protov1.TaskResponse{
-			TaskId: req.TaskId,
-			Payload: &protov1.TaskResponse_Log{
-				Log: &protov1.LogEntry{
-					Level:   protov1.LogEntry_LEVEL_INFO,
-					Message: fmt.Sprintf("Python stdout: %s", stdout.String()),
-					Source:  "python",
-				},
-			},
-		})
-	}
+	// Execute via provider
+	result, err := session.Provider.Execute(ctx, &language.ExecuteRequest{
+		Code:       code,
+		WorkingDir: session.WorkspacePath,
+		Env: map[string]string{
+			"PYTHONPATH": session.WorkspacePath,
+		},
+	})
 
 	if err != nil {
 		_ = stream.Send(&protov1.TaskResponse{
@@ -248,7 +212,7 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 			Payload: &protov1.TaskResponse_Log{
 				Log: &protov1.LogEntry{
 					Level:   protov1.LogEntry_LEVEL_ERROR,
-					Message: fmt.Sprintf("Python error: %s", stderr.String()),
+					Message: fmt.Sprintf("Python error: %v", err),
 					Source:  "python",
 				},
 			},
@@ -258,9 +222,46 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 			Status: protov1.TaskResult_STATUS_FAILURE,
 			Outputs: map[string]string{
 				"error":     err.Error(),
-				"stderr":    stderr.String(),
-				"stdout":    stdout.String(),
-				"exit_code": fmt.Sprintf("%d", cmd.ProcessState.ExitCode()),
+				"stderr":    result.Stderr,
+				"stdout":    result.Stdout,
+				"exit_code": fmt.Sprintf("%d", result.ExitCode),
+			},
+		}, nil
+	}
+
+	// Send output logs
+	if result.Stdout != "" {
+		_ = stream.Send(&protov1.TaskResponse{
+			TaskId: req.TaskId,
+			Payload: &protov1.TaskResponse_Log{
+				Log: &protov1.LogEntry{
+					Level:   protov1.LogEntry_LEVEL_INFO,
+					Message: fmt.Sprintf("Python stdout: %s", result.Stdout),
+					Source:  "python",
+				},
+			},
+		})
+	}
+
+	if result.ExitCode != 0 {
+		_ = stream.Send(&protov1.TaskResponse{
+			TaskId: req.TaskId,
+			Payload: &protov1.TaskResponse_Log{
+				Log: &protov1.LogEntry{
+					Level:   protov1.LogEntry_LEVEL_ERROR,
+					Message: fmt.Sprintf("Python stderr: %s", result.Stderr),
+					Source:  "python",
+				},
+			},
+		})
+
+		return &protov1.TaskResult{
+			Status: protov1.TaskResult_STATUS_FAILURE,
+			Outputs: map[string]string{
+				"error":     "Python execution failed",
+				"stderr":    result.Stderr,
+				"stdout":    result.Stdout,
+				"exit_code": fmt.Sprintf("%d", result.ExitCode),
 			},
 		}, nil
 	}
@@ -268,9 +269,9 @@ func (te *TaskExecutor) handleRunPython(ctx context.Context, session *WorkerSess
 	return &protov1.TaskResult{
 		Status: protov1.TaskResult_STATUS_SUCCESS,
 		Outputs: map[string]string{
-			"stdout":    stdout.String(),
-			"stderr":    stderr.String(),
-			"exit_code": "0",
+			"stdout":    result.Stdout,
+			"stderr":    result.Stderr,
+			"exit_code": fmt.Sprintf("%d", result.ExitCode),
 		},
 	}, nil
 }
@@ -282,6 +283,16 @@ func (te *TaskExecutor) handlePkgInstall(ctx context.Context, session *WorkerSes
 	requirements, ok := req.Arguments["requirements"]
 	if !ok {
 		return nil, fmt.Errorf("missing required argument: requirements")
+	}
+
+	// Check if provider supports package installation
+	if session.Provider == nil || !session.Provider.Supports("pip.install") {
+		return &protov1.TaskResult{
+			Status: protov1.TaskResult_STATUS_FAILURE,
+			Outputs: map[string]string{
+				"error": "Package installation not supported by session provider",
+			},
+		}, nil
 	}
 
 	// Send progress
@@ -326,36 +337,8 @@ func (te *TaskExecutor) handlePkgInstall(ctx context.Context, session *WorkerSes
 		}, nil
 	}
 
-	// Get pip executable
-	venvPip := filepath.Join(session.WorkspacePath, ".venv", "bin", "pip")
-	pipCmd := "pip3"
-	if _, err := os.Stat(venvPip); err == nil {
-		pipCmd = venvPip
-	}
-
-	// Build pip install command
-	args := append([]string{"install"}, pkgList...)
-	//nolint:gosec // G204: pip command is either system pip3 or session's venv, args are from validated requirements
-	cmd := exec.CommandContext(ctx, pipCmd, args...)
-	cmd.Dir = session.WorkspacePath
-
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	err := cmd.Run()
-
-	// Send completion log
-	_ = stream.Send(&protov1.TaskResponse{
-		TaskId: req.TaskId,
-		Payload: &protov1.TaskResponse_Log{
-			Log: &protov1.LogEntry{
-				Level:   protov1.LogEntry_LEVEL_INFO,
-				Message: fmt.Sprintf("Pip stdout: %s", stdout.String()),
-				Source:  "pip",
-			},
-		},
-	})
+	// Install via provider
+	err := session.Provider.InstallPackages(ctx, pkgList)
 
 	if err != nil {
 		_ = stream.Send(&protov1.TaskResponse{
@@ -363,7 +346,7 @@ func (te *TaskExecutor) handlePkgInstall(ctx context.Context, session *WorkerSes
 			Payload: &protov1.TaskResponse_Log{
 				Log: &protov1.LogEntry{
 					Level:   protov1.LogEntry_LEVEL_ERROR,
-					Message: fmt.Sprintf("Pip error: %s", stderr.String()),
+					Message: fmt.Sprintf("Package installation error: %v", err),
 					Source:  "pip",
 				},
 			},
@@ -372,17 +355,32 @@ func (te *TaskExecutor) handlePkgInstall(ctx context.Context, session *WorkerSes
 		return &protov1.TaskResult{
 			Status: protov1.TaskResult_STATUS_FAILURE,
 			Outputs: map[string]string{
-				"error":  fmt.Sprintf("pip install failed: %v", err),
-				"stderr": stderr.String(),
+				"error": fmt.Sprintf("pip install failed: %v", err),
 			},
 		}, nil
 	}
+
+	// Send completion log
+	_ = stream.Send(&protov1.TaskResponse{
+		TaskId: req.TaskId,
+		Payload: &protov1.TaskResponse_Log{
+			Log: &protov1.LogEntry{
+				Level:   protov1.LogEntry_LEVEL_INFO,
+				Message: fmt.Sprintf("Successfully installed: %s", strings.Join(pkgList, ", ")),
+				Source:  "pip",
+			},
+		},
+	})
+
+	// Update session's installed packages list
+	session.mu.Lock()
+	session.InstalledPkgs = append(session.InstalledPkgs, pkgList...)
+	session.mu.Unlock()
 
 	return &protov1.TaskResult{
 		Status: protov1.TaskResult_STATUS_SUCCESS,
 		Outputs: map[string]string{
 			"packages_installed": strings.Join(pkgList, ", "),
-			"stdout":             stdout.String(),
 		},
 	}, nil
 }

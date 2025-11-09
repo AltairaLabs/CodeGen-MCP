@@ -109,6 +109,10 @@ func startMockServer(tb testingTB, mock *mockLifecycleServer) (string, func()) {
 }
 
 func TestRegistrationClient_SuccessfulRegistration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	mock := &mockLifecycleServer{}
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
@@ -157,6 +161,10 @@ func TestRegistrationClient_SuccessfulRegistration(t *testing.T) {
 }
 
 func TestRegistrationClient_RegistrationRejected(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	mock := &mockLifecycleServer{
 		registerFunc: func(req *protov1.RegisterRequest) (*protov1.RegisterResponse, error) {
 			return &protov1.RegisterResponse{
@@ -191,6 +199,10 @@ func TestRegistrationClient_RegistrationRejected(t *testing.T) {
 }
 
 func TestRegistrationClient_HeartbeatFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	failureCount := 0
 	mock := &mockLifecycleServer{
 		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
@@ -236,6 +248,10 @@ func TestRegistrationClient_HeartbeatFailure(t *testing.T) {
 }
 
 func TestRegistrationClient_CapacityReporting(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	var lastCapacity *protov1.SessionCapacity
 	mock := &mockLifecycleServer{
 		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
@@ -286,6 +302,10 @@ func TestRegistrationClient_CapacityReporting(t *testing.T) {
 }
 
 func TestRegistrationClient_WorkerStatus(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	var lastStatus *protov1.WorkerStatus
 	mock := &mockLifecycleServer{
 		heartbeatFunc: func(req *protov1.HeartbeatRequest) (*protov1.HeartbeatResponse, error) {
@@ -337,6 +357,10 @@ func TestRegistrationClient_WorkerStatus(t *testing.T) {
 }
 
 func TestRegistrationClient_ConnectionFailure(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	// Try to connect to a port that's not listening
 	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
 	client := NewRegistrationClient(&RegistrationConfig{
@@ -357,6 +381,10 @@ func TestRegistrationClient_ConnectionFailure(t *testing.T) {
 }
 
 func TestRegistrationClient_ValidatesWorkerID(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	var receivedWorkerID string
 	mock := &mockLifecycleServer{
 		registerFunc: func(req *protov1.RegisterRequest) (*protov1.RegisterResponse, error) {
@@ -397,6 +425,10 @@ func TestRegistrationClient_ValidatesWorkerID(t *testing.T) {
 }
 
 func TestRegistrationClient_SendsCapabilities(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	var receivedCaps *protov1.WorkerCapabilities
 	mock := &mockLifecycleServer{
 		registerFunc: func(req *protov1.RegisterRequest) (*protov1.RegisterResponse, error) {
@@ -452,6 +484,10 @@ func TestRegistrationClient_SendsCapabilities(t *testing.T) {
 }
 
 func TestRegistrationClient_DeregistrationValidation(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	var deregisterReq *protov1.DeregisterRequest
 	mock := &mockLifecycleServer{
 		deregisterFunc: func(req *protov1.DeregisterRequest) (*protov1.DeregisterResponse, error) {
@@ -514,6 +550,10 @@ func TestRegistrationClient_StopWithoutStart(t *testing.T) {
 }
 
 func TestRegistrationClient_ReconnectionSuccess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+
 	// Test that reconnection works after initial failure
 	attemptCount := 0
 	mock := &mockLifecycleServer{

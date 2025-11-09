@@ -11,7 +11,7 @@ import (
 
 func TestHandleEcho(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	// Create test session
@@ -45,7 +45,7 @@ func TestHandleEcho(t *testing.T) {
 
 func TestHandleFsWrite(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -86,7 +86,7 @@ func TestHandleFsWrite(t *testing.T) {
 
 func TestHandleFsRead(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -123,7 +123,7 @@ func TestHandleFsRead(t *testing.T) {
 
 func TestHandleFsList(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -188,7 +188,7 @@ func TestValidateWorkspacePath(t *testing.T) {
 
 func TestHandleFsWrite_PathValidation(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -222,7 +222,7 @@ func TestHandleFsWrite_PathValidation(t *testing.T) {
 
 func TestHandleFsWrite_MissingArguments(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -258,7 +258,7 @@ func TestHandleFsWrite_MissingArguments(t *testing.T) {
 
 func TestHandleRunPython(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -282,7 +282,7 @@ func TestHandleRunPython(t *testing.T) {
 
 func TestHandlePkgInstall(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -362,7 +362,7 @@ func TestHandlePkgInstall(t *testing.T) {
 
 func TestHandleEcho_DefaultMessage(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -389,7 +389,7 @@ func TestHandleEcho_DefaultMessage(t *testing.T) {
 
 func TestHandleFsRead_MissingPath(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -412,7 +412,7 @@ func TestHandleFsRead_MissingPath(t *testing.T) {
 
 func TestHandleFsRead_PathValidation(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -449,7 +449,7 @@ func TestHandleFsRead_PathValidation(t *testing.T) {
 
 func TestHandleFsRead_FileNotFound(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -474,7 +474,7 @@ func TestHandleFsRead_FileNotFound(t *testing.T) {
 
 func TestHandleFsList_DefaultPath(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -508,7 +508,7 @@ func TestHandleFsList_DefaultPath(t *testing.T) {
 
 func TestHandleFsList_PathValidation(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -545,7 +545,7 @@ func TestHandleFsList_PathValidation(t *testing.T) {
 
 func TestHandleFsList_NonExistentPath(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -570,7 +570,7 @@ func TestHandleFsList_NonExistentPath(t *testing.T) {
 
 func TestHandleRunPython_MissingCode(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -594,7 +594,7 @@ func TestHandleRunPython_MissingCode(t *testing.T) {
 
 func TestHandleFsWrite_CreateNestedDirectories(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{

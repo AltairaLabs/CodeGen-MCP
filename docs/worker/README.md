@@ -34,12 +34,18 @@ graph TB
             EXECUTOR[Task Executor<br/>Execution Engine]
             CHECKPOINT[Checkpointer<br/>Persistence Layer]
             TOOLS[Tool Handlers<br/>fs, python, pkg]
+            PROVIDER_FACTORY[Language Provider<br/>Factory]
         end
         
         subgraph "Session Workspaces"
-            S1[Session 1<br/>workspace + venv]
-            S2[Session 2<br/>workspace + venv]
-            SN[Session N<br/>workspace + venv]
+            S1[Session 1<br/>workspace + provider]
+            S2[Session 2<br/>workspace + provider]
+            SN[Session N<br/>workspace + provider]
+        end
+        
+        subgraph "Language Providers"
+            PYTHON[Python Provider<br/>venv + pip]
+            MOCK[Mock Provider<br/>testing]
         end
     end
     
@@ -54,9 +60,17 @@ graph TB
     GRPC --> EXECUTOR
     GRPC --> CHECKPOINT
     
+    SESSION --> PROVIDER_FACTORY
+    PROVIDER_FACTORY --> PYTHON
+    PROVIDER_FACTORY --> MOCK
+    
     SESSION --> S1
     SESSION --> S2
     SESSION --> SN
+    
+    S1 -.-> PYTHON
+    S2 -.-> PYTHON
+    SN -.-> MOCK
     
     EXECUTOR --> TOOLS
     TOOLS --> S1
@@ -74,6 +88,7 @@ graph TB
     style SESSION fill:#7ED321
     style EXECUTOR fill:#F5A623
     style CHECKPOINT fill:#BD10E0
+    style PROVIDER_FACTORY fill:#9013FE
 ```
 
 ## Component Details
@@ -146,15 +161,16 @@ sequenceDiagram
 
 ### 2. Session Pool (`internal/worker/session_pool.go`)
 
-Manages multi-tenant isolated sessions with capacity tracking.
+Manages multi-tenant isolated sessions with capacity tracking and language provider lifecycle.
 
 **Key Responsibilities:**
 - Session creation and destruction
 - Workspace isolation per session
-- Python venv initialization
+- Language provider initialization (via factory)
 - Activity tracking
 - Capacity management
 - Session metadata storage
+- Provider lifecycle management
 
 **Session Structure:**
 
@@ -164,6 +180,7 @@ type WorkerSession struct {
     WorkspaceID      string
     UserID           string
     WorkspacePath    string
+    Provider         language.Provider  // Language-specific runtime
     State            SessionState
     Config           *SessionConfig
     CreatedAt        time.Time
@@ -200,12 +217,12 @@ stateDiagram-v2
 **Key Methods:**
 
 - `CreateSession(ctx, request)` - Create isolated session with workspace
-- `DestroySession(sessionID)` - Clean up session and workspace
+- `DestroySession(sessionID)` - Clean up session, workspace, and provider
 - `GetSession(sessionID)` - Retrieve session by ID
 - `GetCapacity()` - Get current capacity information
 - `UpdateSessionActivity(sessionID)` - Update last activity timestamp
 - `IncrementActiveTasks(sessionID)` - Track active task count
-- `initializePythonVenv(ctx, session)` - Set up Python environment
+- `initializeSession(ctx, session)` - Set up workspace and language provider
 
 ### 3. Task Executor (`internal/worker/task_executor.go`)
 
@@ -337,62 +354,107 @@ func handleFsList(ctx, session, request) TaskResult {
 ```
 
 #### Python Execution
+
 ```go
-// Execute Python code
+// Execute Python code via language provider
 func handleRunPython(ctx, session, request, stream) TaskResult {
     code := request.Arguments["code"]
     
-    // Create temp Python file
-    tmpFile := filepath.Join(session.WorkspacePath, ".tmp_<timestamp>.py")
-    os.WriteFile(tmpFile, []byte(code), 0644)
-    defer os.Remove(tmpFile)
-    
-    // Use venv Python if available, else system python
-    pythonCmd := session.WorkspacePath + "/.venv/bin/python3"
-    if _, err := os.Stat(pythonCmd); err != nil {
-        pythonCmd = "python3"
+    // Delegate to session's language provider
+    result, err := session.Provider.Execute(ctx, &language.ExecuteRequest{
+        Code:          code,
+        WorkspacePath: session.WorkspacePath,
+    })
+    if err != nil {
+        return TaskResult{Status: STATUS_FAILURE, Error: err.Error()}
     }
     
-    // Execute with streaming output
-    cmd := exec.CommandContext(ctx, pythonCmd, tmpFile)
-    cmd.Dir = session.WorkspacePath
-    cmd.Env = append(os.Environ(), "PYTHONPATH=" + session.WorkspacePath)
-    
-    output, err := cmd.CombinedOutput()
     stream.Send(ProgressUpdate{...})
     
     return TaskResult{
-        Status: STATUS_SUCCESS,
-        Outputs: {"stdout": stdout, "stderr": stderr, "exit_code": exitCode},
+        Status:  STATUS_SUCCESS,
+        Outputs: {
+            "stdout":    result.Stdout,
+            "stderr":    result.Stderr,
+            "exit_code": strconv.Itoa(result.ExitCode),
+        },
     }
 }
 ```
 
-#### Package Installation
+**Provider Implementation (Python):**
+
+The Python provider handles venv detection, code execution, and streaming:
+
 ```go
-// Install Python packages
+func (p *PythonProvider) Execute(ctx, req) (*ExecuteResult, error) {
+    // Create temp Python file
+    tmpFile := filepath.Join(req.WorkspacePath, ".tmp_<timestamp>.py")
+    os.WriteFile(tmpFile, []byte(req.Code), 0644)
+    defer os.Remove(tmpFile)
+    
+    // Use venv Python if available, else system python
+    pythonCmd := p.getPythonCommand(req.WorkspacePath)
+    
+    // Execute with streaming output
+    cmd := exec.CommandContext(ctx, pythonCmd, tmpFile)
+    cmd.Dir = req.WorkspacePath
+    cmd.Env = append(os.Environ(), "PYTHONPATH=" + req.WorkspacePath)
+    
+    output, err := cmd.CombinedOutput()
+    
+    return &ExecuteResult{
+        Stdout:   string(output),
+        ExitCode: cmd.ProcessState.ExitCode(),
+    }, nil
+}
+```
+
+#### Package Installation
+
+```go
+// Install Python packages via language provider
 func handlePkgInstall(ctx, session, request, stream) TaskResult {
     requirements := request.Arguments["requirements"]
     pkgList := strings.Split(requirements, "\n")
     
-    // Use venv pip if available
-    pipCmd := session.WorkspacePath + "/.venv/bin/pip"
-    if _, err := os.Stat(pipCmd); err != nil {
-        pipCmd = "pip3"
+    // Delegate to session's language provider
+    installed, err := session.Provider.InstallPackages(ctx, pkgList)
+    if err != nil {
+        return TaskResult{Status: STATUS_FAILURE, Error: err.Error()}
     }
     
-    // Execute pip install
-    args := append([]string{"install"}, pkgList...)
-    cmd := exec.CommandContext(ctx, pipCmd, args...)
-    cmd.Dir = session.WorkspacePath
-    
-    output, err := cmd.CombinedOutput()
     stream.Send(ProgressUpdate{...})
     
     return TaskResult{
-        Status: STATUS_SUCCESS,
-        Outputs: {"installed": pkgList, "stdout": output},
+        Status:  STATUS_SUCCESS,
+        Outputs: {
+            "installed": strings.Join(installed, ","),
+        },
     }
+}
+```
+
+**Provider Implementation (Python):**
+
+The Python provider handles pip installation with venv detection:
+
+```go
+func (p *PythonProvider) InstallPackages(ctx, requirements) ([]string, error) {
+    // Use venv pip if available
+    pipCmd := p.getPipCommand(p.workspacePath)
+    
+    // Execute pip install
+    args := append([]string{"install"}, requirements...)
+    cmd := exec.CommandContext(ctx, pipCmd, args...)
+    cmd.Dir = p.workspacePath
+    
+    output, err := cmd.CombinedOutput()
+    if err != nil {
+        return nil, fmt.Errorf("pip install failed: %w", err)
+    }
+    
+    return requirements, nil
 }
 ```
 

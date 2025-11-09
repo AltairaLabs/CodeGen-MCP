@@ -8,7 +8,8 @@ WORKDIR /build
 
 # Copy go.mod and go.sum for dependency caching
 COPY go.mod go.sum ./
-COPY go.work* ./
+# Copy go workspace files (required for multi-module workspace)
+COPY go.work go.work.sum ./
 RUN go mod download
 
 # Copy source code
@@ -22,15 +23,13 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o coordinator ./cmd/coordina
 # Stage 2: Minimal runtime image
 FROM debian:bookworm-slim
 
-# Install minimal runtime dependencies
+# Install minimal runtime dependencies and create non-root user
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
        ca-certificates \
        netcat-openbsd \
-    && rm -rf /var/lib/apt/lists/*
-
-# Create non-root user
-RUN groupadd -g 1000 coordinator \
+    && rm -rf /var/lib/apt/lists/* \
+    && groupadd -g 1000 coordinator \
     && useradd -m -u 1000 -g coordinator -s /bin/bash coordinator
 
 WORKDIR /app

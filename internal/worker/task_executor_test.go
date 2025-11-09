@@ -26,7 +26,7 @@ func (m *mockTaskStream) RecvMsg(interface{}) error    { return nil }
 
 func TestTaskExecutorExecute(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -67,7 +67,7 @@ func TestTaskExecutorExecute(t *testing.T) {
 
 func TestTaskExecutorNewTaskExecutor(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	if executor == nil {
@@ -85,7 +85,7 @@ func TestTaskExecutorNewTaskExecutor(t *testing.T) {
 
 func TestTaskExecutorExecuteInvalidSession(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	req := &protov1.TaskRequest{
@@ -105,7 +105,7 @@ func TestTaskExecutorExecuteInvalidSession(t *testing.T) {
 
 func TestTaskExecutorActiveTasks(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	if executor.activeTasks == nil {
@@ -119,7 +119,7 @@ func TestTaskExecutorActiveTasks(t *testing.T) {
 
 func TestTaskExecutorCancelNonExistent(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -148,7 +148,7 @@ func TestTaskExecutorCancelNonExistent(t *testing.T) {
 
 func TestTaskExecutorMutex(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	// Test concurrent access to activeTasks map
@@ -166,7 +166,7 @@ func TestTaskExecutorMutex(t *testing.T) {
 
 func TestTaskExecutorExecuteToolInSession(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -205,7 +205,7 @@ func TestTaskExecutorExecuteToolInSession(t *testing.T) {
 
 func TestTaskExecutorGetStatusNonExistent(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -229,7 +229,7 @@ func TestTaskExecutorGetStatusNonExistent(t *testing.T) {
 
 func TestTaskExecutorCancelActiveTask(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
@@ -279,7 +279,7 @@ func TestTaskExecutorCancelActiveTask(t *testing.T) {
 
 func TestTaskExecutorGetStatusActiveTask(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := NewSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
