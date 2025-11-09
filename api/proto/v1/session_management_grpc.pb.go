@@ -19,11 +19,14 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SessionManagement_CreateSession_FullMethodName     = "/codegen.v1.SessionManagement/CreateSession"
-	SessionManagement_DestroySession_FullMethodName    = "/codegen.v1.SessionManagement/DestroySession"
-	SessionManagement_CheckpointSession_FullMethodName = "/codegen.v1.SessionManagement/CheckpointSession"
-	SessionManagement_RestoreSession_FullMethodName    = "/codegen.v1.SessionManagement/RestoreSession"
-	SessionManagement_GetSessionStatus_FullMethodName  = "/codegen.v1.SessionManagement/GetSessionStatus"
+	SessionManagement_CreateSession_FullMethodName         = "/codegen.v1.SessionManagement/CreateSession"
+	SessionManagement_DestroySession_FullMethodName        = "/codegen.v1.SessionManagement/DestroySession"
+	SessionManagement_CheckpointSession_FullMethodName     = "/codegen.v1.SessionManagement/CheckpointSession"
+	SessionManagement_RestoreSession_FullMethodName        = "/codegen.v1.SessionManagement/RestoreSession"
+	SessionManagement_GetSessionStatus_FullMethodName      = "/codegen.v1.SessionManagement/GetSessionStatus"
+	SessionManagement_GetSessionMetadata_FullMethodName    = "/codegen.v1.SessionManagement/GetSessionMetadata"
+	SessionManagement_UpdateSessionMetadata_FullMethodName = "/codegen.v1.SessionManagement/UpdateSessionMetadata"
+	SessionManagement_SetSessionMetadata_FullMethodName    = "/codegen.v1.SessionManagement/SetSessionMetadata"
 )
 
 // SessionManagementClient is the client API for SessionManagement service.
@@ -42,6 +45,12 @@ type SessionManagementClient interface {
 	RestoreSession(ctx context.Context, in *RestoreRequest, opts ...grpc.CallOption) (*RestoreResponse, error)
 	// Get session status and metadata
 	GetSessionStatus(ctx context.Context, in *SessionStatusRequest, opts ...grpc.CallOption) (*SessionStatusResponse, error)
+	// Get session metadata
+	GetSessionMetadata(ctx context.Context, in *GetSessionMetadataRequest, opts ...grpc.CallOption) (*GetSessionMetadataResponse, error)
+	// Update session metadata (partial update - merge with existing)
+	UpdateSessionMetadata(ctx context.Context, in *UpdateSessionMetadataRequest, opts ...grpc.CallOption) (*UpdateSessionMetadataResponse, error)
+	// Set session metadata (replaces all metadata)
+	SetSessionMetadata(ctx context.Context, in *SetSessionMetadataRequest, opts ...grpc.CallOption) (*SetSessionMetadataResponse, error)
 }
 
 type sessionManagementClient struct {
@@ -102,6 +111,36 @@ func (c *sessionManagementClient) GetSessionStatus(ctx context.Context, in *Sess
 	return out, nil
 }
 
+func (c *sessionManagementClient) GetSessionMetadata(ctx context.Context, in *GetSessionMetadataRequest, opts ...grpc.CallOption) (*GetSessionMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSessionMetadataResponse)
+	err := c.cc.Invoke(ctx, SessionManagement_GetSessionMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionManagementClient) UpdateSessionMetadata(ctx context.Context, in *UpdateSessionMetadataRequest, opts ...grpc.CallOption) (*UpdateSessionMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateSessionMetadataResponse)
+	err := c.cc.Invoke(ctx, SessionManagement_UpdateSessionMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sessionManagementClient) SetSessionMetadata(ctx context.Context, in *SetSessionMetadataRequest, opts ...grpc.CallOption) (*SetSessionMetadataResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetSessionMetadataResponse)
+	err := c.cc.Invoke(ctx, SessionManagement_SetSessionMetadata_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SessionManagementServer is the server API for SessionManagement service.
 // All implementations must embed UnimplementedSessionManagementServer
 // for forward compatibility.
@@ -118,6 +157,12 @@ type SessionManagementServer interface {
 	RestoreSession(context.Context, *RestoreRequest) (*RestoreResponse, error)
 	// Get session status and metadata
 	GetSessionStatus(context.Context, *SessionStatusRequest) (*SessionStatusResponse, error)
+	// Get session metadata
+	GetSessionMetadata(context.Context, *GetSessionMetadataRequest) (*GetSessionMetadataResponse, error)
+	// Update session metadata (partial update - merge with existing)
+	UpdateSessionMetadata(context.Context, *UpdateSessionMetadataRequest) (*UpdateSessionMetadataResponse, error)
+	// Set session metadata (replaces all metadata)
+	SetSessionMetadata(context.Context, *SetSessionMetadataRequest) (*SetSessionMetadataResponse, error)
 	mustEmbedUnimplementedSessionManagementServer()
 }
 
@@ -142,6 +187,15 @@ func (UnimplementedSessionManagementServer) RestoreSession(context.Context, *Res
 }
 func (UnimplementedSessionManagementServer) GetSessionStatus(context.Context, *SessionStatusRequest) (*SessionStatusResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSessionStatus not implemented")
+}
+func (UnimplementedSessionManagementServer) GetSessionMetadata(context.Context, *GetSessionMetadataRequest) (*GetSessionMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSessionMetadata not implemented")
+}
+func (UnimplementedSessionManagementServer) UpdateSessionMetadata(context.Context, *UpdateSessionMetadataRequest) (*UpdateSessionMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateSessionMetadata not implemented")
+}
+func (UnimplementedSessionManagementServer) SetSessionMetadata(context.Context, *SetSessionMetadataRequest) (*SetSessionMetadataResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetSessionMetadata not implemented")
 }
 func (UnimplementedSessionManagementServer) mustEmbedUnimplementedSessionManagementServer() {}
 func (UnimplementedSessionManagementServer) testEmbeddedByValue()                           {}
@@ -254,6 +308,60 @@ func _SessionManagement_GetSessionStatus_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SessionManagement_GetSessionMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSessionMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionManagementServer).GetSessionMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionManagement_GetSessionMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionManagementServer).GetSessionMetadata(ctx, req.(*GetSessionMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionManagement_UpdateSessionMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSessionMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionManagementServer).UpdateSessionMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionManagement_UpdateSessionMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionManagementServer).UpdateSessionMetadata(ctx, req.(*UpdateSessionMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SessionManagement_SetSessionMetadata_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetSessionMetadataRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SessionManagementServer).SetSessionMetadata(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SessionManagement_SetSessionMetadata_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SessionManagementServer).SetSessionMetadata(ctx, req.(*SetSessionMetadataRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SessionManagement_ServiceDesc is the grpc.ServiceDesc for SessionManagement service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -280,6 +388,18 @@ var SessionManagement_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSessionStatus",
 			Handler:    _SessionManagement_GetSessionStatus_Handler,
+		},
+		{
+			MethodName: "GetSessionMetadata",
+			Handler:    _SessionManagement_GetSessionMetadata_Handler,
+		},
+		{
+			MethodName: "UpdateSessionMetadata",
+			Handler:    _SessionManagement_UpdateSessionMetadata_Handler,
+		},
+		{
+			MethodName: "SetSessionMetadata",
+			Handler:    _SessionManagement_SetSessionMetadata_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

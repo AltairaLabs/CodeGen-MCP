@@ -39,3 +39,4 @@ docker-compose.override.yml
 
 bin/**
 tmp/
+.mypy_cache/

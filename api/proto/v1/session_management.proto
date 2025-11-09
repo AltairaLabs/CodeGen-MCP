@@ -22,6 +22,15 @@ service SessionManagement {
   
   // Get session status and metadata
   rpc GetSessionStatus(SessionStatusRequest) returns (SessionStatusResponse);
+  
+  // Get session metadata
+  rpc GetSessionMetadata(GetSessionMetadataRequest) returns (GetSessionMetadataResponse);
+  
+  // Update session metadata (partial update - merge with existing)
+  rpc UpdateSessionMetadata(UpdateSessionMetadataRequest) returns (UpdateSessionMetadataResponse);
+  
+  // Set session metadata (replaces all metadata)
+  rpc SetSessionMetadata(SetSessionMetadataRequest) returns (SetSessionMetadataResponse);
 }
 
 message CreateSessionRequest {
@@ -29,6 +38,7 @@ message CreateSessionRequest {
   string workspace_id = 2;          // Workspace identifier
   string user_id = 3;               // User/tenant identifier
   SessionConfig config = 4;
+  map<string, string> metadata = 5; // Initial session metadata
 }
 
 message SessionConfig {
@@ -45,6 +55,7 @@ message CreateSessionResponse {
   string workspace_path = 3;        // Path to workspace on worker
   SessionState state = 4;
   int64 created_at_ms = 5;
+  map<string, string> metadata = 6; // Initial session metadata
 }
 
 message DestroySessionRequest {
@@ -106,4 +117,33 @@ message SessionStatusResponse {
   SessionInfo info = 4;
   repeated string recent_tasks = 5;  // Recent task IDs
   string last_checkpoint_id = 6;
+}
+
+message GetSessionMetadataRequest {
+  string session_id = 1;
+}
+
+message GetSessionMetadataResponse {
+  string session_id = 1;
+  map<string, string> metadata = 2;
+}
+
+message UpdateSessionMetadataRequest {
+  string session_id = 1;
+  map<string, string> metadata = 2;  // Merged with existing metadata
+}
+
+message UpdateSessionMetadataResponse {
+  string session_id = 1;
+  map<string, string> metadata = 2;  // Complete metadata after update
+}
+
+message SetSessionMetadataRequest {
+  string session_id = 1;
+  map<string, string> metadata = 2;  // Replaces all metadata
+}
+
+message SetSessionMetadataResponse {
+  string session_id = 1;
+  map<string, string> metadata = 2;  // Complete metadata after set
 }

@@ -157,7 +157,8 @@ message TaskStreamResult {
   map<string, string> outputs = 2;
   repeated string artifacts = 3;
   TaskExecutionMetadata metadata = 4;
-  uint64 sequence = 5;             // Sequence number of completed task (for deduplication tracking)
+  uint64 sequence = 5;                        // Sequence number of completed task (for deduplication tracking)
+  map<string, string> session_metadata = 6;   // Updated session metadata after task execution (worker is master)
 }
 
 message TaskExecutionMetadata {
@@ -184,7 +185,8 @@ message SessionCreateRequest {
   string session_id = 1;        // Session ID to create
   string workspace_id = 2;      // Workspace identifier
   string user_id = 3;           // User/tenant identifier
-  map<string, string> env_vars = 4;  // Environment variables for session
+  map<string, string> env_vars = 4;         // Environment variables for session
+  map<string, string> metadata = 5;         // Initial session metadata
 }
 
 // SessionCreateResponse is sent by worker to coordinator after session creation
@@ -192,4 +194,5 @@ message SessionCreateResponse {
   string session_id = 1;        // Session ID that was created
   bool success = 2;             // Whether creation succeeded
   string error = 3;             // Error message if failed
+  map<string, string> metadata = 4;  // Initial session metadata from worker
 }

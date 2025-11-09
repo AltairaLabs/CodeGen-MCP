@@ -491,9 +491,21 @@ func (rc *Client) handleSessionCreate(req *protov1.SessionCreateRequest) {
 		"workspace_id", req.WorkspaceId,
 		"user_id", req.UserId)
 
-	// Create session in the session pool with coordinator-provided ID
+	// Create session in the session pool with coordinator-provided ID and metadata
 	ctx := context.Background()
-	err := rc.sessionPool.CreateSessionWithID(ctx, sessionID, req.WorkspaceId, req.UserId, req.EnvVars)
+	err := rc.sessionPool.CreateSessionWithID(ctx, sessionID, req.WorkspaceId, req.UserId, req.EnvVars, req.Metadata)
+
+	// Get the created session's metadata
+	sessionMetadata := make(map[string]string)
+	if err == nil {
+		if meta, metaErr := rc.sessionPool.GetSessionMetadata(sessionID); metaErr == nil {
+			sessionMetadata = meta
+		} else {
+			rc.logger.Warn("Failed to retrieve session metadata after creation",
+				"session_id", sessionID,
+				"error", metaErr)
+		}
+	}
 
 	// Send response back to coordinator
 	response := &protov1.TaskStreamMessage{
@@ -502,6 +514,7 @@ func (rc *Client) handleSessionCreate(req *protov1.SessionCreateRequest) {
 				SessionId: sessionID,
 				Success:   err == nil,
 				Error:     "",
+				Metadata:  sessionMetadata,
 			},
 		},
 	}
@@ -560,6 +573,17 @@ func (t *taskResponseCollector) Send(resp *protov1.TaskResponse) error {
 			},
 		}
 	case *protov1.TaskResponse_Result:
+		// Get current session metadata to sync back to coordinator
+		sessionMetadata := make(map[string]string)
+		if meta, metaErr := t.sessionPool.GetSessionMetadata(t.sessionID); metaErr == nil {
+			sessionMetadata = meta
+		} else {
+			t.logger.Warn("Failed to retrieve session metadata for task result",
+				"session_id", t.sessionID,
+				"task_id", t.taskID,
+				"error", metaErr)
+		}
+
 		streamResp.Payload = &protov1.TaskStreamResponse_Result{
 			Result: &protov1.TaskStreamResult{
 				Status:    protov1.TaskStreamResult_Status(payload.Result.Status),
@@ -572,7 +596,8 @@ func (t *taskResponseCollector) Send(resp *protov1.TaskResponse) error {
 					PeakUsage:   payload.Result.Metadata.PeakUsage,
 					ExitCode:    payload.Result.Metadata.ExitCode,
 				},
-				Sequence: t.sequence, // Include sequence for coordinator tracking
+				Sequence:        t.sequence,      // Include sequence for coordinator tracking
+				SessionMetadata: sessionMetadata, // Sync worker metadata to coordinator
 			},
 		}
 

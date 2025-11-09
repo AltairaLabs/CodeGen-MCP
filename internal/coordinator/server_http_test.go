@@ -13,7 +13,8 @@ import (
 // TestHandleFsWrite_WithHTTPSession tests that fs.write works with HTTP/SSE session context
 // This test replicates the real HTTP/SSE flow where session is managed by mcp-go library
 func TestHandleFsWrite_WithHTTPSession(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)

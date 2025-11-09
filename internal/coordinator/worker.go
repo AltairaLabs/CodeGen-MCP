@@ -146,6 +146,22 @@ func (r *RealWorkerClient) ExecuteTask(
 			switch payload := response.Payload.(type) {
 			case *protov1.TaskStreamResponse_Result:
 				finalResult = payload.Result
+
+				// Sync session metadata from worker (worker is master)
+				if finalResult.SessionMetadata != nil && len(finalResult.SessionMetadata) > 0 {
+					if err := r.sessionManager.storage.SetSessionMetadata(ctx, session.ID, finalResult.SessionMetadata); err != nil {
+						r.logger.WarnContext(ctx, "Failed to sync session metadata from worker",
+							"session_id", session.ID,
+							"error", err,
+						)
+					} else {
+						r.logger.DebugContext(ctx, "Synced session metadata from worker",
+							"session_id", session.ID,
+							"metadata_keys", len(finalResult.SessionMetadata),
+						)
+					}
+				}
+
 				// Task complete, cleanup and return
 				worker.mu.Lock()
 				delete(worker.PendingTasks, taskID)

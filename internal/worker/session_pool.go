@@ -41,11 +41,12 @@ type WorkerSession struct {
 	LastActivity     time.Time
 	ActiveTasks      int32
 	ResourceUsage    *protov1.ResourceUsage
-	InstalledPkgs    []string // Track installed Python packages
-	RecentTasks      []string // Track recent task IDs (max 10)
-	LastCheckpointID string   // Last successful checkpoint ID
-	ArtifactIDs      []string // Artifact IDs created in this session
-	LastCompletedSeq uint64   // Last completed task sequence number (for deduplication)
+	InstalledPkgs    []string          // Track installed Python packages
+	RecentTasks      []string          // Track recent task IDs (max 10)
+	LastCheckpointID string            // Last successful checkpoint ID
+	ArtifactIDs      []string          // Artifact IDs created in this session
+	LastCompletedSeq uint64            // Last completed task sequence number (for deduplication)
+	Metadata         map[string]string // Session metadata (worker is master, syncs to coordinator)
 	mu               sync.RWMutex
 	maxRecentTasks   int
 }
@@ -85,7 +86,7 @@ func NewSessionPoolWithFactory(
 }
 
 // CreateSessionWithID creates a new session with a specific session ID (used for coordinator-assigned sessions)
-func (sp *SessionPool) CreateSessionWithID(ctx context.Context, sessionID, workspaceID, userID string, envVars map[string]string) error {
+func (sp *SessionPool) CreateSessionWithID(ctx context.Context, sessionID, workspaceID, userID string, envVars map[string]string, metadata map[string]string) error {
 	sp.mu.Lock()
 	defer sp.mu.Unlock()
 
@@ -112,6 +113,14 @@ func (sp *SessionPool) CreateSessionWithID(ctx context.Context, sessionID, works
 		EnvVars: envVars,
 	}
 
+	// Initialize metadata with provided values
+	sessionMetadata := make(map[string]string)
+	if metadata != nil {
+		for k, v := range metadata {
+			sessionMetadata[k] = v
+		}
+	}
+
 	// Initialize session
 	session := &WorkerSession{
 		SessionID:        sessionID,
@@ -128,6 +137,7 @@ func (sp *SessionPool) CreateSessionWithID(ctx context.Context, sessionID, works
 		RecentTasks:      make([]string, 0),
 		LastCheckpointID: "",
 		ArtifactIDs:      make([]string, 0),
+		Metadata:         sessionMetadata,
 		maxRecentTasks:   defaultMaxRecentTasks,
 	}
 
@@ -437,5 +447,72 @@ func (sp *SessionPool) SetLastCompletedSequence(sessionID string, sequence uint6
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	session.LastCompletedSeq = sequence
+	return nil
+}
+
+// GetSessionMetadata retrieves all metadata for a session
+func (sp *SessionPool) GetSessionMetadata(sessionID string) (map[string]string, error) {
+	sp.mu.RLock()
+	session, exists := sp.sessions[sessionID]
+	sp.mu.RUnlock()
+
+	if !exists {
+		return nil, fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	session.mu.RLock()
+	defer session.mu.RUnlock()
+
+	// Return a copy to prevent external modifications
+	metadata := make(map[string]string, len(session.Metadata))
+	for k, v := range session.Metadata {
+		metadata[k] = v
+	}
+	return metadata, nil
+}
+
+// SetSessionMetadata replaces all metadata for a session
+func (sp *SessionPool) SetSessionMetadata(sessionID string, metadata map[string]string) error {
+	sp.mu.RLock()
+	session, exists := sp.sessions[sessionID]
+	sp.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// Replace all metadata
+	session.Metadata = make(map[string]string, len(metadata))
+	for k, v := range metadata {
+		session.Metadata[k] = v
+	}
+	return nil
+}
+
+// UpdateSessionMetadata merges new metadata with existing metadata
+func (sp *SessionPool) UpdateSessionMetadata(sessionID string, updates map[string]string) error {
+	sp.mu.RLock()
+	session, exists := sp.sessions[sessionID]
+	sp.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+
+	// Initialize metadata if nil
+	if session.Metadata == nil {
+		session.Metadata = make(map[string]string)
+	}
+
+	// Merge updates
+	for k, v := range updates {
+		session.Metadata[k] = v
+	}
 	return nil
 }

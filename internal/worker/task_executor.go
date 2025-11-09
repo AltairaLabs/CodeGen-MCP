@@ -14,6 +14,35 @@ const (
 	progressCompleted = 100
 )
 
+// MetadataRequirement defines a required metadata field for a tool
+type MetadataRequirement struct {
+	Key         string
+	Description string
+	Required    bool
+}
+
+// ToolMetadataValidator defines validation requirements for a tool
+type ToolMetadataValidator interface {
+	// GetRequiredMetadata returns the list of metadata requirements for this tool
+	GetRequiredMetadata() []MetadataRequirement
+}
+
+// ValidateMetadata checks if the session metadata satisfies the tool's requirements
+func ValidateMetadata(metadata map[string]string, requirements []MetadataRequirement) error {
+	for _, req := range requirements {
+		if req.Required {
+			value, exists := metadata[req.Key]
+			if !exists {
+				return fmt.Errorf("required metadata field missing: %s (%s)", req.Key, req.Description)
+			}
+			if value == "" {
+				return fmt.Errorf("required metadata field is empty: %s (%s)", req.Key, req.Description)
+			}
+		}
+	}
+	return nil
+}
+
 // TaskExecutor handles task execution within sessions
 type TaskExecutor struct {
 	sessionPool *SessionPool
@@ -188,6 +217,20 @@ func (te *TaskExecutor) GetStatus(ctx context.Context, req *protov1.StatusReques
 //
 //nolint:lll // Protobuf types create inherently long function signatures
 func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest, stream protov1.TaskExecution_ExecuteTaskServer) (*protov1.TaskResult, error) {
+	// Validate metadata requirements before execution
+	metadata, metaErr := te.sessionPool.GetSessionMetadata(req.SessionId)
+	if metaErr != nil {
+		return nil, fmt.Errorf("failed to retrieve session metadata: %w", metaErr)
+	}
+
+	// Get metadata requirements for this tool
+	requirements := te.getToolMetadataRequirements(req.ToolName)
+	if len(requirements) > 0 {
+		if err := ValidateMetadata(metadata, requirements); err != nil {
+			return nil, fmt.Errorf("metadata validation failed: %w", err)
+		}
+	}
+
 	// Send progress update
 	_ = stream.Send(&protov1.TaskResponse{
 		TaskId: req.TaskId,
@@ -251,4 +294,26 @@ func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *Worke
 	})
 
 	return result, nil
+}
+
+// getToolMetadataRequirements returns metadata requirements for a specific tool
+// Tools can be extended to declare their metadata dependencies here
+func (te *TaskExecutor) getToolMetadataRequirements(toolName string) []MetadataRequirement {
+	// Define metadata requirements per tool
+	// This can be extended as new tools are added
+	//
+	// Example requirements (currently none are enforced):
+	//
+	// case "run.python":
+	//     return []MetadataRequirement{
+	//         {Key: "python_version", Description: "Python interpreter version", Required: true},
+	//         {Key: "virtual_env", Description: "Virtual environment path", Required: false},
+	//     }
+	// case "pkg.install":
+	//     return []MetadataRequirement{
+	//         {Key: "package_manager", Description: "Package manager to use", Required: true},
+	//     }
+
+	// No metadata requirements currently defined
+	return []MetadataRequirement{}
 }

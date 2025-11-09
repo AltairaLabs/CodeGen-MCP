@@ -13,7 +13,8 @@ import (
 
 // Test handleEcho directly by calling it as a method
 func TestHandleEcho(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -58,7 +59,8 @@ func TestHandleEcho(t *testing.T) {
 
 // Test handleEcho with missing message argument
 func TestHandleEcho_MissingMessage(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -97,7 +99,8 @@ func TestHandleEcho_MissingMessage(t *testing.T) {
 
 // Test handleFsRead directly
 func TestHandleFsRead(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -139,7 +142,8 @@ func TestHandleFsRead(t *testing.T) {
 
 // Test handleFsRead with absolute path (should fail)
 func TestHandleFsRead_AbsolutePath(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -181,7 +185,8 @@ func TestHandleFsRead_AbsolutePath(t *testing.T) {
 
 // Test handleFsRead with path traversal (should fail)
 func TestHandleFsRead_PathTraversal(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -223,7 +228,8 @@ func TestHandleFsRead_PathTraversal(t *testing.T) {
 
 // Test handleFsWrite directly
 func TestHandleFsWrite(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -266,7 +272,8 @@ func TestHandleFsWrite(t *testing.T) {
 
 // Test handleFsWrite with path traversal (should fail)
 func TestHandleFsWrite_PathTraversal(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -309,7 +316,8 @@ func TestHandleFsWrite_PathTraversal(t *testing.T) {
 
 // Test handleFsWrite with missing contents (should fail)
 func TestHandleFsWrite_MissingContents(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -351,7 +359,8 @@ func TestHandleFsWrite_MissingContents(t *testing.T) {
 
 // Test validateWorkspacePath directly
 func TestValidateWorkspacePath(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -393,7 +402,8 @@ func TestValidateWorkspacePath(t *testing.T) {
 
 // Test getSessionID directly
 func TestGetSessionID(t *testing.T) {
-	sm := NewSessionManager()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -439,7 +449,8 @@ func TestGetSessionID(t *testing.T) {
 
 func TestGetOrCreateSession_NewSession(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sm := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -505,7 +516,8 @@ func TestGetOrCreateSession_NewSession(t *testing.T) {
 
 func TestGetOrCreateSession_ExistingSession(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sm := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)
@@ -561,7 +573,8 @@ func TestGetOrCreateSession_ExistingSession(t *testing.T) {
 func TestGetOrCreateSession_NoWorkersAvailable(t *testing.T) {
 	// Create registry with NO workers
 	registry := NewWorkerRegistry()
-	sm := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
 	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
 	audit := NewAuditLogger(logger)

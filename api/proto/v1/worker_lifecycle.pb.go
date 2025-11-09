@@ -1252,14 +1252,15 @@ func (x *TaskLogEntry) GetSource() string {
 }
 
 type TaskStreamResult struct {
-	state         protoimpl.MessageState  `protogen:"open.v1"`
-	Status        TaskStreamResult_Status `protobuf:"varint,1,opt,name=status,proto3,enum=codegen.v1.TaskStreamResult_Status" json:"status,omitempty"`
-	Outputs       map[string]string       `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Artifacts     []string                `protobuf:"bytes,3,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
-	Metadata      *TaskExecutionMetadata  `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
-	Sequence      uint64                  `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"` // Sequence number of completed task (for deduplication tracking)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState  `protogen:"open.v1"`
+	Status          TaskStreamResult_Status `protobuf:"varint,1,opt,name=status,proto3,enum=codegen.v1.TaskStreamResult_Status" json:"status,omitempty"`
+	Outputs         map[string]string       `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Artifacts       []string                `protobuf:"bytes,3,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	Metadata        *TaskExecutionMetadata  `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Sequence        uint64                  `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`                                                                                                               // Sequence number of completed task (for deduplication tracking)
+	SessionMetadata map[string]string       `protobuf:"bytes,6,rep,name=session_metadata,json=sessionMetadata,proto3" json:"session_metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Updated session metadata after task execution (worker is master)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *TaskStreamResult) Reset() {
@@ -1325,6 +1326,13 @@ func (x *TaskStreamResult) GetSequence() uint64 {
 		return x.Sequence
 	}
 	return 0
+}
+
+func (x *TaskStreamResult) GetSessionMetadata() map[string]string {
+	if x != nil {
+		return x.SessionMetadata
+	}
+	return nil
 }
 
 type TaskExecutionMetadata struct {
@@ -1522,6 +1530,7 @@ type SessionCreateRequest struct {
 	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`                                                               // Workspace identifier
 	UserId        string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                                                              // User/tenant identifier
 	EnvVars       map[string]string      `protobuf:"bytes,4,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Environment variables for session
+	Metadata      map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`              // Initial session metadata
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1584,12 +1593,20 @@ func (x *SessionCreateRequest) GetEnvVars() map[string]string {
 	return nil
 }
 
+func (x *SessionCreateRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
 // SessionCreateResponse is sent by worker to coordinator after session creation
 type SessionCreateResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // Session ID that was created
-	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`                     // Whether creation succeeded
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`                          // Error message if failed
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`                                                        // Session ID that was created
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`                                                                            // Whether creation succeeded
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`                                                                                 // Error message if failed
+	Metadata      map[string]string      `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Initial session metadata from worker
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1643,6 +1660,13 @@ func (x *SessionCreateResponse) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *SessionCreateResponse) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
 }
 
 var File_api_proto_v1_worker_lifecycle_proto protoreflect.FileDescriptor
@@ -1752,14 +1776,18 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"LEVEL_INFO\x10\x02\x12\x0e\n" +
 	"\n" +
 	"LEVEL_WARN\x10\x03\x12\x0f\n" +
-	"\vLEVEL_ERROR\x10\x04\"\xbd\x03\n" +
+	"\vLEVEL_ERROR\x10\x04\"\xdf\x04\n" +
 	"\x10TaskStreamResult\x12;\n" +
 	"\x06status\x18\x01 \x01(\x0e2#.codegen.v1.TaskStreamResult.StatusR\x06status\x12C\n" +
 	"\aoutputs\x18\x02 \x03(\v2).codegen.v1.TaskStreamResult.OutputsEntryR\aoutputs\x12\x1c\n" +
 	"\tartifacts\x18\x03 \x03(\tR\tartifacts\x12=\n" +
 	"\bmetadata\x18\x04 \x01(\v2!.codegen.v1.TaskExecutionMetadataR\bmetadata\x12\x1a\n" +
-	"\bsequence\x18\x05 \x01(\x04R\bsequence\x1a:\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\x12\\\n" +
+	"\x10session_metadata\x18\x06 \x03(\v21.codegen.v1.TaskStreamResult.SessionMetadataEntryR\x0fsessionMetadata\x1a:\n" +
 	"\fOutputsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aB\n" +
+	"\x14SessionMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"r\n" +
 	"\x06Status\x12\x16\n" +
@@ -1782,21 +1810,29 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"\adetails\x18\x03 \x01(\tR\adetails\x12\x1c\n" +
 	"\tretriable\x18\x04 \x01(\bR\tretriable\"4\n" +
 	"\x0fStreamKeepAlive\x12!\n" +
-	"\ftimestamp_ms\x18\x01 \x01(\x03R\vtimestampMs\"\xf7\x01\n" +
+	"\ftimestamp_ms\x18\x01 \x01(\x03R\vtimestampMs\"\x80\x03\n" +
 	"\x14SessionCreateRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x17\n" +
 	"\auser_id\x18\x03 \x01(\tR\x06userId\x12H\n" +
-	"\benv_vars\x18\x04 \x03(\v2-.codegen.v1.SessionCreateRequest.EnvVarsEntryR\aenvVars\x1a:\n" +
+	"\benv_vars\x18\x04 \x03(\v2-.codegen.v1.SessionCreateRequest.EnvVarsEntryR\aenvVars\x12J\n" +
+	"\bmetadata\x18\x05 \x03(\v2..codegen.v1.SessionCreateRequest.MetadataEntryR\bmetadata\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"f\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf0\x01\n" +
 	"\x15SessionCreateResponse\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error2\xcb\x02\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12K\n" +
+	"\bmetadata\x18\x04 \x03(\v2/.codegen.v1.SessionCreateResponse.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xcb\x02\n" +
 	"\x0fWorkerLifecycle\x12K\n" +
 	"\x0eRegisterWorker\x12\x1b.codegen.v1.RegisterRequest\x1a\x1c.codegen.v1.RegisterResponse\x12H\n" +
 	"\tHeartbeat\x12\x1c.codegen.v1.HeartbeatRequest\x1a\x1d.codegen.v1.HeartbeatResponse\x12Q\n" +
@@ -1817,7 +1853,7 @@ func file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proto_v1_worker_lifecycle_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_api_proto_v1_worker_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_api_proto_v1_worker_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_api_proto_v1_worker_lifecycle_proto_goTypes = []any{
 	(WorkerStatus_State)(0),       // 0: codegen.v1.WorkerStatus.State
 	(TaskLogEntry_Level)(0),       // 1: codegen.v1.TaskLogEntry.Level
@@ -1845,30 +1881,33 @@ var file_api_proto_v1_worker_lifecycle_proto_goTypes = []any{
 	nil,                           // 23: codegen.v1.WorkerCapabilities.MetadataEntry
 	nil,                           // 24: codegen.v1.TaskAssignment.ArgumentsEntry
 	nil,                           // 25: codegen.v1.TaskStreamResult.OutputsEntry
-	nil,                           // 26: codegen.v1.SessionCreateRequest.EnvVarsEntry
-	(*ResourceLimits)(nil),        // 27: codegen.v1.ResourceLimits
-	(*SessionInfo)(nil),           // 28: codegen.v1.SessionInfo
-	(*ResourceUsage)(nil),         // 29: codegen.v1.ResourceUsage
-	(*TaskContext)(nil),           // 30: codegen.v1.TaskContext
-	(*ExecutionConstraints)(nil),  // 31: codegen.v1.ExecutionConstraints
+	nil,                           // 26: codegen.v1.TaskStreamResult.SessionMetadataEntry
+	nil,                           // 27: codegen.v1.SessionCreateRequest.EnvVarsEntry
+	nil,                           // 28: codegen.v1.SessionCreateRequest.MetadataEntry
+	nil,                           // 29: codegen.v1.SessionCreateResponse.MetadataEntry
+	(*ResourceLimits)(nil),        // 30: codegen.v1.ResourceLimits
+	(*SessionInfo)(nil),           // 31: codegen.v1.SessionInfo
+	(*ResourceUsage)(nil),         // 32: codegen.v1.ResourceUsage
+	(*TaskContext)(nil),           // 33: codegen.v1.TaskContext
+	(*ExecutionConstraints)(nil),  // 34: codegen.v1.ExecutionConstraints
 }
 var file_api_proto_v1_worker_lifecycle_proto_depIdxs = []int32{
 	4,  // 0: codegen.v1.RegisterRequest.capabilities:type_name -> codegen.v1.WorkerCapabilities
-	27, // 1: codegen.v1.RegisterRequest.limits:type_name -> codegen.v1.ResourceLimits
+	30, // 1: codegen.v1.RegisterRequest.limits:type_name -> codegen.v1.ResourceLimits
 	23, // 2: codegen.v1.WorkerCapabilities.metadata:type_name -> codegen.v1.WorkerCapabilities.MetadataEntry
 	8,  // 3: codegen.v1.HeartbeatRequest.status:type_name -> codegen.v1.WorkerStatus
 	7,  // 4: codegen.v1.HeartbeatRequest.capacity:type_name -> codegen.v1.SessionCapacity
-	28, // 5: codegen.v1.SessionCapacity.sessions:type_name -> codegen.v1.SessionInfo
+	31, // 5: codegen.v1.SessionCapacity.sessions:type_name -> codegen.v1.SessionInfo
 	0,  // 6: codegen.v1.WorkerStatus.state:type_name -> codegen.v1.WorkerStatus.State
-	29, // 7: codegen.v1.WorkerStatus.current_usage:type_name -> codegen.v1.ResourceUsage
+	32, // 7: codegen.v1.WorkerStatus.current_usage:type_name -> codegen.v1.ResourceUsage
 	13, // 8: codegen.v1.TaskStreamMessage.assignment:type_name -> codegen.v1.TaskAssignment
 	14, // 9: codegen.v1.TaskStreamMessage.response:type_name -> codegen.v1.TaskStreamResponse
 	20, // 10: codegen.v1.TaskStreamMessage.keepalive:type_name -> codegen.v1.StreamKeepAlive
 	21, // 11: codegen.v1.TaskStreamMessage.session_create:type_name -> codegen.v1.SessionCreateRequest
 	22, // 12: codegen.v1.TaskStreamMessage.session_created:type_name -> codegen.v1.SessionCreateResponse
 	24, // 13: codegen.v1.TaskAssignment.arguments:type_name -> codegen.v1.TaskAssignment.ArgumentsEntry
-	30, // 14: codegen.v1.TaskAssignment.context:type_name -> codegen.v1.TaskContext
-	31, // 15: codegen.v1.TaskAssignment.constraints:type_name -> codegen.v1.ExecutionConstraints
+	33, // 14: codegen.v1.TaskAssignment.context:type_name -> codegen.v1.TaskContext
+	34, // 15: codegen.v1.TaskAssignment.constraints:type_name -> codegen.v1.ExecutionConstraints
 	15, // 16: codegen.v1.TaskStreamResponse.progress:type_name -> codegen.v1.TaskProgressUpdate
 	16, // 17: codegen.v1.TaskStreamResponse.log:type_name -> codegen.v1.TaskLogEntry
 	17, // 18: codegen.v1.TaskStreamResponse.result:type_name -> codegen.v1.TaskStreamResult
@@ -1877,21 +1916,24 @@ var file_api_proto_v1_worker_lifecycle_proto_depIdxs = []int32{
 	2,  // 21: codegen.v1.TaskStreamResult.status:type_name -> codegen.v1.TaskStreamResult.Status
 	25, // 22: codegen.v1.TaskStreamResult.outputs:type_name -> codegen.v1.TaskStreamResult.OutputsEntry
 	18, // 23: codegen.v1.TaskStreamResult.metadata:type_name -> codegen.v1.TaskExecutionMetadata
-	29, // 24: codegen.v1.TaskExecutionMetadata.peak_usage:type_name -> codegen.v1.ResourceUsage
-	26, // 25: codegen.v1.SessionCreateRequest.env_vars:type_name -> codegen.v1.SessionCreateRequest.EnvVarsEntry
-	3,  // 26: codegen.v1.WorkerLifecycle.RegisterWorker:input_type -> codegen.v1.RegisterRequest
-	6,  // 27: codegen.v1.WorkerLifecycle.Heartbeat:input_type -> codegen.v1.HeartbeatRequest
-	10, // 28: codegen.v1.WorkerLifecycle.DeregisterWorker:input_type -> codegen.v1.DeregisterRequest
-	12, // 29: codegen.v1.WorkerLifecycle.TaskStream:input_type -> codegen.v1.TaskStreamMessage
-	5,  // 30: codegen.v1.WorkerLifecycle.RegisterWorker:output_type -> codegen.v1.RegisterResponse
-	9,  // 31: codegen.v1.WorkerLifecycle.Heartbeat:output_type -> codegen.v1.HeartbeatResponse
-	11, // 32: codegen.v1.WorkerLifecycle.DeregisterWorker:output_type -> codegen.v1.DeregisterResponse
-	12, // 33: codegen.v1.WorkerLifecycle.TaskStream:output_type -> codegen.v1.TaskStreamMessage
-	30, // [30:34] is the sub-list for method output_type
-	26, // [26:30] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	26, // 24: codegen.v1.TaskStreamResult.session_metadata:type_name -> codegen.v1.TaskStreamResult.SessionMetadataEntry
+	32, // 25: codegen.v1.TaskExecutionMetadata.peak_usage:type_name -> codegen.v1.ResourceUsage
+	27, // 26: codegen.v1.SessionCreateRequest.env_vars:type_name -> codegen.v1.SessionCreateRequest.EnvVarsEntry
+	28, // 27: codegen.v1.SessionCreateRequest.metadata:type_name -> codegen.v1.SessionCreateRequest.MetadataEntry
+	29, // 28: codegen.v1.SessionCreateResponse.metadata:type_name -> codegen.v1.SessionCreateResponse.MetadataEntry
+	3,  // 29: codegen.v1.WorkerLifecycle.RegisterWorker:input_type -> codegen.v1.RegisterRequest
+	6,  // 30: codegen.v1.WorkerLifecycle.Heartbeat:input_type -> codegen.v1.HeartbeatRequest
+	10, // 31: codegen.v1.WorkerLifecycle.DeregisterWorker:input_type -> codegen.v1.DeregisterRequest
+	12, // 32: codegen.v1.WorkerLifecycle.TaskStream:input_type -> codegen.v1.TaskStreamMessage
+	5,  // 33: codegen.v1.WorkerLifecycle.RegisterWorker:output_type -> codegen.v1.RegisterResponse
+	9,  // 34: codegen.v1.WorkerLifecycle.Heartbeat:output_type -> codegen.v1.HeartbeatResponse
+	11, // 35: codegen.v1.WorkerLifecycle.DeregisterWorker:output_type -> codegen.v1.DeregisterResponse
+	12, // 36: codegen.v1.WorkerLifecycle.TaskStream:output_type -> codegen.v1.TaskStreamMessage
+	33, // [33:37] is the sub-list for method output_type
+	29, // [29:33] is the sub-list for method input_type
+	29, // [29:29] is the sub-list for extension type_name
+	29, // [29:29] is the sub-list for extension extendee
+	0,  // [0:29] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_v1_worker_lifecycle_proto_init() }
@@ -1920,7 +1962,7 @@ func file_api_proto_v1_worker_lifecycle_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_worker_lifecycle_proto_rawDesc), len(file_api_proto_v1_worker_lifecycle_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   24,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

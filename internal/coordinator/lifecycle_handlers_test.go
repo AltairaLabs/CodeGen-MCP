@@ -12,12 +12,18 @@ import (
 
 // testSessionStorage is a simple in-memory implementation for testing
 type testSessionStorage struct {
-	sessions map[string]*Session
+	sessions               map[string]*Session
+	conversationIDs        map[string]string // conversationID -> sessionID
+	lastCompletedSequences map[string]uint64
+	nextSequences          map[string]uint64
 }
 
 func newTestSessionStorage() *testSessionStorage {
 	return &testSessionStorage{
-		sessions: make(map[string]*Session),
+		sessions:               make(map[string]*Session),
+		conversationIDs:        make(map[string]string),
+		lastCompletedSequences: make(map[string]uint64),
+		nextSequences:          make(map[string]uint64),
 	}
 }
 
@@ -62,39 +68,41 @@ func (s *testSessionStorage) GetSessionMetadata(ctx context.Context, sessionID s
 }
 
 func (s *testSessionStorage) GetSessionByConversationID(ctx context.Context, conversationID string) (*Session, error) {
-	for _, session := range s.sessions {
-		if session.ConversationID == conversationID {
-			return session, nil
-		}
+	if sessionID, ok := s.conversationIDs[conversationID]; ok {
+		return s.sessions[sessionID], nil
 	}
 	return nil, nil
 }
 
 func (s *testSessionStorage) DeleteSession(ctx context.Context, sessionID string) error {
 	delete(s.sessions, sessionID)
+	delete(s.lastCompletedSequences, sessionID)
+	delete(s.nextSequences, sessionID)
+	// Clean up conversation ID mapping
+	for convID, sid := range s.conversationIDs {
+		if sid == sessionID {
+			delete(s.conversationIDs, convID)
+			break
+		}
+	}
 	return nil
 }
 
 func (s *testSessionStorage) GetLastCompletedSequence(ctx context.Context, sessionID string) (uint64, error) {
-	if session, ok := s.sessions[sessionID]; ok {
-		return session.LastCompletedSeq, nil
+	if seq, ok := s.lastCompletedSequences[sessionID]; ok {
+		return seq, nil
 	}
 	return 0, nil
 }
 
 func (s *testSessionStorage) SetLastCompletedSequence(ctx context.Context, sessionID string, sequence uint64) error {
-	if session, ok := s.sessions[sessionID]; ok {
-		session.LastCompletedSeq = sequence
-	}
+	s.lastCompletedSequences[sessionID] = sequence
 	return nil
 }
 
 func (s *testSessionStorage) GetNextSequence(ctx context.Context, sessionID string) (uint64, error) {
-	if session, ok := s.sessions[sessionID]; ok {
-		session.NextSequence++
-		return session.NextSequence, nil
-	}
-	return 0, nil
+	s.nextSequences[sessionID]++
+	return s.nextSequences[sessionID], nil
 }
 
 func (s *testSessionStorage) ListSessions(ctx context.Context) ([]*Session, error) {
@@ -139,7 +147,8 @@ func TestNewCoordinatorServer(t *testing.T) {
 
 func TestRegisterWorker_Success(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	req := &protov1.RegisterRequest{
@@ -179,7 +188,8 @@ func TestRegisterWorker_Success(t *testing.T) {
 
 func TestRegisterWorker_MissingWorkerID(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	req := &protov1.RegisterRequest{
@@ -203,7 +213,8 @@ func TestRegisterWorker_MissingWorkerID(t *testing.T) {
 
 func TestRegisterWorker_Reregistration(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	req := &protov1.RegisterRequest{
@@ -241,7 +252,8 @@ func TestRegisterWorker_Reregistration(t *testing.T) {
 
 func TestHeartbeat_Success(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	// Register worker first
@@ -281,7 +293,8 @@ func TestHeartbeat_Success(t *testing.T) {
 
 func TestHeartbeat_UnregisteredWorker(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	hbReq := &protov1.HeartbeatRequest{
@@ -302,7 +315,8 @@ func TestHeartbeat_UnregisteredWorker(t *testing.T) {
 
 func TestHeartbeat_InvalidSessionID(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	// Register worker
@@ -340,7 +354,8 @@ func TestHeartbeat_InvalidSessionID(t *testing.T) {
 
 func TestDeregisterWorker_Success(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	// Register worker
@@ -378,7 +393,8 @@ func TestDeregisterWorker_Success(t *testing.T) {
 
 func TestDeregisterWorker_UnknownWorker(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	deregReq := &protov1.DeregisterRequest{
@@ -399,7 +415,8 @@ func TestDeregisterWorker_UnknownWorker(t *testing.T) {
 
 func TestDeregisterWorker_InvalidSessionID(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	// Register worker
@@ -440,7 +457,8 @@ func TestDeregisterWorker_InvalidSessionID(t *testing.T) {
 
 func TestStartCleanupLoop(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	// Register a worker
@@ -481,7 +499,8 @@ func TestStartCleanupLoop(t *testing.T) {
 
 func TestRegisterWithServer(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	grpcServer := grpc.NewServer()
@@ -493,7 +512,8 @@ func TestRegisterWithServer(t *testing.T) {
 
 func TestHeartbeat_WithCapacityInfo(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 	server := NewCoordinatorServer(registry, sessionMgr, slog.Default())
 
 	// Register worker

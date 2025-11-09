@@ -27,6 +27,7 @@ type CreateSessionRequest struct {
 	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"` // Workspace identifier
 	UserId        string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                // User/tenant identifier
 	Config        *SessionConfig         `protobuf:"bytes,4,opt,name=config,proto3" json:"config,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,5,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Initial session metadata
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -85,6 +86,13 @@ func (x *CreateSessionRequest) GetUserId() string {
 func (x *CreateSessionRequest) GetConfig() *SessionConfig {
 	if x != nil {
 		return x.Config
+	}
+	return nil
+}
+
+func (x *CreateSessionRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
 	}
 	return nil
 }
@@ -172,6 +180,7 @@ type CreateSessionResponse struct {
 	WorkspacePath string                 `protobuf:"bytes,3,opt,name=workspace_path,json=workspacePath,proto3" json:"workspace_path,omitempty"` // Path to workspace on worker
 	State         SessionState           `protobuf:"varint,4,opt,name=state,proto3,enum=codegen.v1.SessionState" json:"state,omitempty"`
 	CreatedAtMs   int64                  `protobuf:"varint,5,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,6,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Initial session metadata
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -239,6 +248,13 @@ func (x *CreateSessionResponse) GetCreatedAtMs() int64 {
 		return x.CreatedAtMs
 	}
 	return 0
+}
+
+func (x *CreateSessionResponse) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
 }
 
 type DestroySessionRequest struct {
@@ -837,17 +853,325 @@ func (x *SessionStatusResponse) GetLastCheckpointId() string {
 	return ""
 }
 
+type GetSessionMetadataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSessionMetadataRequest) Reset() {
+	*x = GetSessionMetadataRequest{}
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSessionMetadataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSessionMetadataRequest) ProtoMessage() {}
+
+func (x *GetSessionMetadataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSessionMetadataRequest.ProtoReflect.Descriptor instead.
+func (*GetSessionMetadataRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_session_management_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *GetSessionMetadataRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type GetSessionMetadataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSessionMetadataResponse) Reset() {
+	*x = GetSessionMetadataResponse{}
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSessionMetadataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSessionMetadataResponse) ProtoMessage() {}
+
+func (x *GetSessionMetadataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSessionMetadataResponse.ProtoReflect.Descriptor instead.
+func (*GetSessionMetadataResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_session_management_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *GetSessionMetadataResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *GetSessionMetadataResponse) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type UpdateSessionMetadataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Merged with existing metadata
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSessionMetadataRequest) Reset() {
+	*x = UpdateSessionMetadataRequest{}
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSessionMetadataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSessionMetadataRequest) ProtoMessage() {}
+
+func (x *UpdateSessionMetadataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSessionMetadataRequest.ProtoReflect.Descriptor instead.
+func (*UpdateSessionMetadataRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_session_management_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *UpdateSessionMetadataRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *UpdateSessionMetadataRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type UpdateSessionMetadataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Complete metadata after update
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateSessionMetadataResponse) Reset() {
+	*x = UpdateSessionMetadataResponse{}
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateSessionMetadataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateSessionMetadataResponse) ProtoMessage() {}
+
+func (x *UpdateSessionMetadataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateSessionMetadataResponse.ProtoReflect.Descriptor instead.
+func (*UpdateSessionMetadataResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_session_management_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *UpdateSessionMetadataResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *UpdateSessionMetadataResponse) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type SetSessionMetadataRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Replaces all metadata
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSessionMetadataRequest) Reset() {
+	*x = SetSessionMetadataRequest{}
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSessionMetadataRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSessionMetadataRequest) ProtoMessage() {}
+
+func (x *SetSessionMetadataRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSessionMetadataRequest.ProtoReflect.Descriptor instead.
+func (*SetSessionMetadataRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_session_management_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *SetSessionMetadataRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SetSessionMetadataRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type SetSessionMetadataResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	Metadata      map[string]string      `protobuf:"bytes,2,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Complete metadata after set
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetSessionMetadataResponse) Reset() {
+	*x = SetSessionMetadataResponse{}
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetSessionMetadataResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetSessionMetadataResponse) ProtoMessage() {}
+
+func (x *SetSessionMetadataResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_session_management_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetSessionMetadataResponse.ProtoReflect.Descriptor instead.
+func (*SetSessionMetadataResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_session_management_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *SetSessionMetadataResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SetSessionMetadataResponse) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
 var File_api_proto_v1_session_management_proto protoreflect.FileDescriptor
 
 const file_api_proto_v1_session_management_proto_rawDesc = "" +
 	"\n" +
 	"%api/proto/v1/session_management.proto\x12\n" +
-	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\xa2\x01\n" +
+	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\xab\x02\n" +
 	"\x14CreateSessionRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12!\n" +
 	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x17\n" +
 	"\auser_id\x18\x03 \x01(\tR\x06userId\x121\n" +
-	"\x06config\x18\x04 \x01(\v2\x19.codegen.v1.SessionConfigR\x06config\"\xa4\x02\n" +
+	"\x06config\x18\x04 \x01(\v2\x19.codegen.v1.SessionConfigR\x06config\x12J\n" +
+	"\bmetadata\x18\x05 \x03(\v2..codegen.v1.CreateSessionRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa4\x02\n" +
 	"\rSessionConfig\x12A\n" +
 	"\benv_vars\x18\x01 \x03(\v2&.codegen.v1.SessionConfig.EnvVarsEntryR\aenvVars\x12%\n" +
 	"\x0erequired_tools\x18\x02 \x03(\tR\rrequiredTools\x12\x1a\n" +
@@ -857,14 +1181,18 @@ const file_api_proto_v1_session_management_proto_rawDesc = "" +
 	"base_image\x18\x05 \x01(\tR\tbaseImage\x1a:\n" +
 	"\fEnvVarsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xce\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd8\x02\n" +
 	"\x15CreateSessionResponse\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x1b\n" +
 	"\tworker_id\x18\x02 \x01(\tR\bworkerId\x12%\n" +
 	"\x0eworkspace_path\x18\x03 \x01(\tR\rworkspacePath\x12.\n" +
 	"\x05state\x18\x04 \x01(\x0e2\x18.codegen.v1.SessionStateR\x05state\x12\"\n" +
-	"\rcreated_at_ms\x18\x05 \x01(\x03R\vcreatedAtMs\"u\n" +
+	"\rcreated_at_ms\x18\x05 \x01(\x03R\vcreatedAtMs\x12K\n" +
+	"\bmetadata\x18\x06 \x03(\v2/.codegen.v1.CreateSessionResponse.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"u\n" +
 	"\x15DestroySessionRequest\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x14\n" +
@@ -918,13 +1246,54 @@ const file_api_proto_v1_session_management_proto_rawDesc = "" +
 	"\x05state\x18\x03 \x01(\x0e2\x18.codegen.v1.SessionStateR\x05state\x12+\n" +
 	"\x04info\x18\x04 \x01(\v2\x17.codegen.v1.SessionInfoR\x04info\x12!\n" +
 	"\frecent_tasks\x18\x05 \x03(\tR\vrecentTasks\x12,\n" +
-	"\x12last_checkpoint_id\x18\x06 \x01(\tR\x10lastCheckpointId2\xba\x03\n" +
+	"\x12last_checkpoint_id\x18\x06 \x01(\tR\x10lastCheckpointId\":\n" +
+	"\x19GetSessionMetadataRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"\xca\x01\n" +
+	"\x1aGetSessionMetadataResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12P\n" +
+	"\bmetadata\x18\x02 \x03(\v24.codegen.v1.GetSessionMetadataResponse.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xce\x01\n" +
+	"\x1cUpdateSessionMetadataRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12R\n" +
+	"\bmetadata\x18\x02 \x03(\v26.codegen.v1.UpdateSessionMetadataRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xd0\x01\n" +
+	"\x1dUpdateSessionMetadataResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12S\n" +
+	"\bmetadata\x18\x02 \x03(\v27.codegen.v1.UpdateSessionMetadataResponse.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc8\x01\n" +
+	"\x19SetSessionMetadataRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12O\n" +
+	"\bmetadata\x18\x02 \x03(\v23.codegen.v1.SetSessionMetadataRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xca\x01\n" +
+	"\x1aSetSessionMetadataResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12P\n" +
+	"\bmetadata\x18\x02 \x03(\v24.codegen.v1.SetSessionMetadataResponse.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x012\xf2\x05\n" +
 	"\x11SessionManagement\x12T\n" +
 	"\rCreateSession\x12 .codegen.v1.CreateSessionRequest\x1a!.codegen.v1.CreateSessionResponse\x12W\n" +
 	"\x0eDestroySession\x12!.codegen.v1.DestroySessionRequest\x1a\".codegen.v1.DestroySessionResponse\x12R\n" +
 	"\x11CheckpointSession\x12\x1d.codegen.v1.CheckpointRequest\x1a\x1e.codegen.v1.CheckpointResponse\x12I\n" +
 	"\x0eRestoreSession\x12\x1a.codegen.v1.RestoreRequest\x1a\x1b.codegen.v1.RestoreResponse\x12W\n" +
-	"\x10GetSessionStatus\x12 .codegen.v1.SessionStatusRequest\x1a!.codegen.v1.SessionStatusResponseB9Z7github.com/altairalabs/codegen-mcp/api/proto/v1;protov1b\x06proto3"
+	"\x10GetSessionStatus\x12 .codegen.v1.SessionStatusRequest\x1a!.codegen.v1.SessionStatusResponse\x12c\n" +
+	"\x12GetSessionMetadata\x12%.codegen.v1.GetSessionMetadataRequest\x1a&.codegen.v1.GetSessionMetadataResponse\x12l\n" +
+	"\x15UpdateSessionMetadata\x12(.codegen.v1.UpdateSessionMetadataRequest\x1a).codegen.v1.UpdateSessionMetadataResponse\x12c\n" +
+	"\x12SetSessionMetadata\x12%.codegen.v1.SetSessionMetadataRequest\x1a&.codegen.v1.SetSessionMetadataResponseB9Z7github.com/altairalabs/codegen-mcp/api/proto/v1;protov1b\x06proto3"
 
 var (
 	file_api_proto_v1_session_management_proto_rawDescOnce sync.Once
@@ -938,52 +1307,78 @@ func file_api_proto_v1_session_management_proto_rawDescGZIP() []byte {
 	return file_api_proto_v1_session_management_proto_rawDescData
 }
 
-var file_api_proto_v1_session_management_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_api_proto_v1_session_management_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_api_proto_v1_session_management_proto_goTypes = []any{
-	(*CreateSessionRequest)(nil),   // 0: codegen.v1.CreateSessionRequest
-	(*SessionConfig)(nil),          // 1: codegen.v1.SessionConfig
-	(*CreateSessionResponse)(nil),  // 2: codegen.v1.CreateSessionResponse
-	(*DestroySessionRequest)(nil),  // 3: codegen.v1.DestroySessionRequest
-	(*DestroySessionResponse)(nil), // 4: codegen.v1.DestroySessionResponse
-	(*CheckpointRequest)(nil),      // 5: codegen.v1.CheckpointRequest
-	(*CheckpointResponse)(nil),     // 6: codegen.v1.CheckpointResponse
-	(*CheckpointMetadata)(nil),     // 7: codegen.v1.CheckpointMetadata
-	(*RestoreRequest)(nil),         // 8: codegen.v1.RestoreRequest
-	(*RestoreResponse)(nil),        // 9: codegen.v1.RestoreResponse
-	(*SessionStatusRequest)(nil),   // 10: codegen.v1.SessionStatusRequest
-	(*SessionStatusResponse)(nil),  // 11: codegen.v1.SessionStatusResponse
-	nil,                            // 12: codegen.v1.SessionConfig.EnvVarsEntry
-	nil,                            // 13: codegen.v1.CheckpointMetadata.EnvVarsEntry
-	(*ResourceLimits)(nil),         // 14: codegen.v1.ResourceLimits
-	(SessionState)(0),              // 15: codegen.v1.SessionState
-	(*SessionInfo)(nil),            // 16: codegen.v1.SessionInfo
+	(*CreateSessionRequest)(nil),          // 0: codegen.v1.CreateSessionRequest
+	(*SessionConfig)(nil),                 // 1: codegen.v1.SessionConfig
+	(*CreateSessionResponse)(nil),         // 2: codegen.v1.CreateSessionResponse
+	(*DestroySessionRequest)(nil),         // 3: codegen.v1.DestroySessionRequest
+	(*DestroySessionResponse)(nil),        // 4: codegen.v1.DestroySessionResponse
+	(*CheckpointRequest)(nil),             // 5: codegen.v1.CheckpointRequest
+	(*CheckpointResponse)(nil),            // 6: codegen.v1.CheckpointResponse
+	(*CheckpointMetadata)(nil),            // 7: codegen.v1.CheckpointMetadata
+	(*RestoreRequest)(nil),                // 8: codegen.v1.RestoreRequest
+	(*RestoreResponse)(nil),               // 9: codegen.v1.RestoreResponse
+	(*SessionStatusRequest)(nil),          // 10: codegen.v1.SessionStatusRequest
+	(*SessionStatusResponse)(nil),         // 11: codegen.v1.SessionStatusResponse
+	(*GetSessionMetadataRequest)(nil),     // 12: codegen.v1.GetSessionMetadataRequest
+	(*GetSessionMetadataResponse)(nil),    // 13: codegen.v1.GetSessionMetadataResponse
+	(*UpdateSessionMetadataRequest)(nil),  // 14: codegen.v1.UpdateSessionMetadataRequest
+	(*UpdateSessionMetadataResponse)(nil), // 15: codegen.v1.UpdateSessionMetadataResponse
+	(*SetSessionMetadataRequest)(nil),     // 16: codegen.v1.SetSessionMetadataRequest
+	(*SetSessionMetadataResponse)(nil),    // 17: codegen.v1.SetSessionMetadataResponse
+	nil,                                   // 18: codegen.v1.CreateSessionRequest.MetadataEntry
+	nil,                                   // 19: codegen.v1.SessionConfig.EnvVarsEntry
+	nil,                                   // 20: codegen.v1.CreateSessionResponse.MetadataEntry
+	nil,                                   // 21: codegen.v1.CheckpointMetadata.EnvVarsEntry
+	nil,                                   // 22: codegen.v1.GetSessionMetadataResponse.MetadataEntry
+	nil,                                   // 23: codegen.v1.UpdateSessionMetadataRequest.MetadataEntry
+	nil,                                   // 24: codegen.v1.UpdateSessionMetadataResponse.MetadataEntry
+	nil,                                   // 25: codegen.v1.SetSessionMetadataRequest.MetadataEntry
+	nil,                                   // 26: codegen.v1.SetSessionMetadataResponse.MetadataEntry
+	(*ResourceLimits)(nil),                // 27: codegen.v1.ResourceLimits
+	(SessionState)(0),                     // 28: codegen.v1.SessionState
+	(*SessionInfo)(nil),                   // 29: codegen.v1.SessionInfo
 }
 var file_api_proto_v1_session_management_proto_depIdxs = []int32{
 	1,  // 0: codegen.v1.CreateSessionRequest.config:type_name -> codegen.v1.SessionConfig
-	12, // 1: codegen.v1.SessionConfig.env_vars:type_name -> codegen.v1.SessionConfig.EnvVarsEntry
-	14, // 2: codegen.v1.SessionConfig.limits:type_name -> codegen.v1.ResourceLimits
-	15, // 3: codegen.v1.CreateSessionResponse.state:type_name -> codegen.v1.SessionState
-	7,  // 4: codegen.v1.CheckpointResponse.metadata:type_name -> codegen.v1.CheckpointMetadata
-	13, // 5: codegen.v1.CheckpointMetadata.env_vars:type_name -> codegen.v1.CheckpointMetadata.EnvVarsEntry
-	15, // 6: codegen.v1.RestoreResponse.state:type_name -> codegen.v1.SessionState
-	7,  // 7: codegen.v1.RestoreResponse.checkpoint_metadata:type_name -> codegen.v1.CheckpointMetadata
-	15, // 8: codegen.v1.SessionStatusResponse.state:type_name -> codegen.v1.SessionState
-	16, // 9: codegen.v1.SessionStatusResponse.info:type_name -> codegen.v1.SessionInfo
-	0,  // 10: codegen.v1.SessionManagement.CreateSession:input_type -> codegen.v1.CreateSessionRequest
-	3,  // 11: codegen.v1.SessionManagement.DestroySession:input_type -> codegen.v1.DestroySessionRequest
-	5,  // 12: codegen.v1.SessionManagement.CheckpointSession:input_type -> codegen.v1.CheckpointRequest
-	8,  // 13: codegen.v1.SessionManagement.RestoreSession:input_type -> codegen.v1.RestoreRequest
-	10, // 14: codegen.v1.SessionManagement.GetSessionStatus:input_type -> codegen.v1.SessionStatusRequest
-	2,  // 15: codegen.v1.SessionManagement.CreateSession:output_type -> codegen.v1.CreateSessionResponse
-	4,  // 16: codegen.v1.SessionManagement.DestroySession:output_type -> codegen.v1.DestroySessionResponse
-	6,  // 17: codegen.v1.SessionManagement.CheckpointSession:output_type -> codegen.v1.CheckpointResponse
-	9,  // 18: codegen.v1.SessionManagement.RestoreSession:output_type -> codegen.v1.RestoreResponse
-	11, // 19: codegen.v1.SessionManagement.GetSessionStatus:output_type -> codegen.v1.SessionStatusResponse
-	15, // [15:20] is the sub-list for method output_type
-	10, // [10:15] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	18, // 1: codegen.v1.CreateSessionRequest.metadata:type_name -> codegen.v1.CreateSessionRequest.MetadataEntry
+	19, // 2: codegen.v1.SessionConfig.env_vars:type_name -> codegen.v1.SessionConfig.EnvVarsEntry
+	27, // 3: codegen.v1.SessionConfig.limits:type_name -> codegen.v1.ResourceLimits
+	28, // 4: codegen.v1.CreateSessionResponse.state:type_name -> codegen.v1.SessionState
+	20, // 5: codegen.v1.CreateSessionResponse.metadata:type_name -> codegen.v1.CreateSessionResponse.MetadataEntry
+	7,  // 6: codegen.v1.CheckpointResponse.metadata:type_name -> codegen.v1.CheckpointMetadata
+	21, // 7: codegen.v1.CheckpointMetadata.env_vars:type_name -> codegen.v1.CheckpointMetadata.EnvVarsEntry
+	28, // 8: codegen.v1.RestoreResponse.state:type_name -> codegen.v1.SessionState
+	7,  // 9: codegen.v1.RestoreResponse.checkpoint_metadata:type_name -> codegen.v1.CheckpointMetadata
+	28, // 10: codegen.v1.SessionStatusResponse.state:type_name -> codegen.v1.SessionState
+	29, // 11: codegen.v1.SessionStatusResponse.info:type_name -> codegen.v1.SessionInfo
+	22, // 12: codegen.v1.GetSessionMetadataResponse.metadata:type_name -> codegen.v1.GetSessionMetadataResponse.MetadataEntry
+	23, // 13: codegen.v1.UpdateSessionMetadataRequest.metadata:type_name -> codegen.v1.UpdateSessionMetadataRequest.MetadataEntry
+	24, // 14: codegen.v1.UpdateSessionMetadataResponse.metadata:type_name -> codegen.v1.UpdateSessionMetadataResponse.MetadataEntry
+	25, // 15: codegen.v1.SetSessionMetadataRequest.metadata:type_name -> codegen.v1.SetSessionMetadataRequest.MetadataEntry
+	26, // 16: codegen.v1.SetSessionMetadataResponse.metadata:type_name -> codegen.v1.SetSessionMetadataResponse.MetadataEntry
+	0,  // 17: codegen.v1.SessionManagement.CreateSession:input_type -> codegen.v1.CreateSessionRequest
+	3,  // 18: codegen.v1.SessionManagement.DestroySession:input_type -> codegen.v1.DestroySessionRequest
+	5,  // 19: codegen.v1.SessionManagement.CheckpointSession:input_type -> codegen.v1.CheckpointRequest
+	8,  // 20: codegen.v1.SessionManagement.RestoreSession:input_type -> codegen.v1.RestoreRequest
+	10, // 21: codegen.v1.SessionManagement.GetSessionStatus:input_type -> codegen.v1.SessionStatusRequest
+	12, // 22: codegen.v1.SessionManagement.GetSessionMetadata:input_type -> codegen.v1.GetSessionMetadataRequest
+	14, // 23: codegen.v1.SessionManagement.UpdateSessionMetadata:input_type -> codegen.v1.UpdateSessionMetadataRequest
+	16, // 24: codegen.v1.SessionManagement.SetSessionMetadata:input_type -> codegen.v1.SetSessionMetadataRequest
+	2,  // 25: codegen.v1.SessionManagement.CreateSession:output_type -> codegen.v1.CreateSessionResponse
+	4,  // 26: codegen.v1.SessionManagement.DestroySession:output_type -> codegen.v1.DestroySessionResponse
+	6,  // 27: codegen.v1.SessionManagement.CheckpointSession:output_type -> codegen.v1.CheckpointResponse
+	9,  // 28: codegen.v1.SessionManagement.RestoreSession:output_type -> codegen.v1.RestoreResponse
+	11, // 29: codegen.v1.SessionManagement.GetSessionStatus:output_type -> codegen.v1.SessionStatusResponse
+	13, // 30: codegen.v1.SessionManagement.GetSessionMetadata:output_type -> codegen.v1.GetSessionMetadataResponse
+	15, // 31: codegen.v1.SessionManagement.UpdateSessionMetadata:output_type -> codegen.v1.UpdateSessionMetadataResponse
+	17, // 32: codegen.v1.SessionManagement.SetSessionMetadata:output_type -> codegen.v1.SetSessionMetadataResponse
+	25, // [25:33] is the sub-list for method output_type
+	17, // [17:25] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_v1_session_management_proto_init() }
@@ -998,7 +1393,7 @@ func file_api_proto_v1_session_management_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_session_management_proto_rawDesc), len(file_api_proto_v1_session_management_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
