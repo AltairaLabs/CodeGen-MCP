@@ -516,3 +516,57 @@ func (sp *SessionPool) UpdateSessionMetadata(sessionID string, updates map[strin
 	}
 	return nil
 }
+
+// AbandonSession abandons a session without saving state
+// Used when coordinator instructs worker to abandon an orphaned session
+func (sp *SessionPool) AbandonSession(ctx context.Context, sessionID string) error {
+	sp.mu.Lock()
+	session, exists := sp.sessions[sessionID]
+	if !exists {
+		sp.mu.Unlock()
+		// Session doesn't exist - already cleaned up or never existed
+		return nil
+	}
+	delete(sp.sessions, sessionID)
+	sp.mu.Unlock()
+
+	// Clean up resources without checkpointing
+	if session.Provider != nil {
+		if err := session.Provider.Cleanup(ctx); err != nil {
+			// Log error but continue cleanup
+			_ = fmt.Errorf("failed to cleanup provider for abandoned session %s: %w", sessionID, err)
+		}
+	}
+
+	// Clean up workspace directory
+	if err := os.RemoveAll(session.WorkspacePath); err != nil {
+		return fmt.Errorf("failed to remove workspace for abandoned session %s: %w", sessionID, err)
+	}
+
+	return nil
+}
+
+// AbandonAllSessions abandons all sessions without saving state
+// Used during worker reconnection when coordinator has no record of sessions
+func (sp *SessionPool) AbandonAllSessions(ctx context.Context) (int, error) {
+	sp.mu.Lock()
+	sessionIDs := make([]string, 0, len(sp.sessions))
+	for sessionID := range sp.sessions {
+		sessionIDs = append(sessionIDs, sessionID)
+	}
+	sp.mu.Unlock()
+
+	abandonedCount := 0
+	var lastError error
+
+	for _, sessionID := range sessionIDs {
+		if err := sp.AbandonSession(ctx, sessionID); err != nil {
+			lastError = err
+			// Continue abandoning other sessions even if one fails
+			continue
+		}
+		abandonedCount++
+	}
+
+	return abandonedCount, lastError
+}

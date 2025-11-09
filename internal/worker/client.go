@@ -711,6 +711,7 @@ func (rc *Client) deregister(ctx context.Context) error {
 }
 
 // reconnect attempts to reconnect to the coordinator with exponential backoff
+// Continuously retries until successful or worker is stopped
 func (rc *Client) reconnect(ctx context.Context) error {
 	rc.logger.Info("Attempting to reconnect to coordinator")
 
@@ -722,14 +723,16 @@ func (rc *Client) reconnect(ctx context.Context) error {
 		rc.registrationID = ""
 	}
 
-	// Retry with exponential backoff
+	// Continuous retry with exponential backoff
 	const (
 		exponentialBackoffFactor = 2
-		maxAttempts              = 10
 	)
 	delay := rc.baseReconnectDelay
+	attempt := 0
 
-	for attempt := 0; attempt < maxAttempts; attempt++ {
+	for {
+		attempt++
+
 		select {
 		case <-rc.stopChan:
 			return fmt.Errorf("reconnection canceled")
@@ -739,14 +742,13 @@ func (rc *Client) reconnect(ctx context.Context) error {
 		}
 
 		rc.logger.Info("Reconnection attempt",
-			"attempt", attempt+1,
-			"max_attempts", maxAttempts,
+			"attempt", attempt,
 			"delay", delay)
 
 		// Try to connect and register
 		if err := rc.connectAndRegister(ctx); err != nil {
 			rc.logger.Warn("Reconnection attempt failed",
-				"attempt", attempt+1,
+				"attempt", attempt,
 				"error", err)
 
 			// Wait before next attempt
@@ -766,9 +768,20 @@ func (rc *Client) reconnect(ctx context.Context) error {
 			continue
 		}
 
-		rc.logger.Info("Reconnection successful")
+		rc.logger.Info("Reconnection successful", "attempts", attempt)
+
+		// Reopen task stream after successful reconnection
+		if err := rc.openTaskStream(ctx); err != nil {
+			rc.logger.Error("Failed to reopen task stream after reconnection", "error", err)
+			// Continue to retry the entire connection process
+			delay = rc.baseReconnectDelay
+			continue
+		}
+
+		// Restart task stream listener
+		go rc.taskStreamLoop()
+
+		rc.logger.Info("Task stream restored after reconnection")
 		return nil
 	}
-
-	return fmt.Errorf("failed to reconnect after %d attempts", maxAttempts)
 }

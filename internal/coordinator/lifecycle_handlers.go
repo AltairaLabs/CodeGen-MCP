@@ -106,6 +106,37 @@ func (cs *CoordinatorServer) RegisterWorker(
 		"worker_id", req.WorkerId,
 		"session_id", sessionID)
 
+	// Check for existing sessions that were assigned to this worker
+	// This handles worker reconnection scenarios
+	existingSessions, err := cs.sessionManager.GetSessionsByWorkerID(req.WorkerId)
+	if err != nil {
+		cs.logger.Warn("Failed to query existing sessions for worker",
+			"worker_id", req.WorkerId,
+			"error", err)
+	} else if len(existingSessions) > 0 {
+		cs.logger.Info("Found existing sessions for reconnected worker",
+			"worker_id", req.WorkerId,
+			"session_count", len(existingSessions))
+
+		// TODO: Implement session recovery protocol (Phase 5 Step 5.2)
+		// For each existing session:
+		// 1. Check if session is still valid (not failed/terminated)
+		// 2. Retrieve session metadata to send to worker
+		// 3. Send session recovery request to worker via task stream
+		// 4. Worker reconciles: accepts recovery (restores state) or rejects (abandons)
+		// 5. Update session state based on worker response
+		//
+		// For now, we log that sessions exist and worker should abandon them
+		// Worker will handle cleanup when it realizes sessions aren't recovered
+		for _, sess := range existingSessions {
+			cs.logger.Debug("Existing session for worker",
+				"session_id", sess.ID,
+				"workspace_id", sess.WorkspaceID,
+				"state", sess.State,
+				"worker_id", req.WorkerId)
+		}
+	}
+
 	return &protov1.RegisterResponse{
 		SessionId:            sessionID,
 		TaskEndpoint:         "", // Worker connects to us, not the other way

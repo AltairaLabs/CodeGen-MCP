@@ -120,6 +120,16 @@ func (s *testSessionStorage) UpdateSessionActivity(ctx context.Context, sessionI
 	return nil
 }
 
+func (s *testSessionStorage) ListSessionsByWorkerID(ctx context.Context, workerID string) ([]*Session, error) {
+	sessions := make([]*Session, 0)
+	for _, session := range s.sessions {
+		if session.WorkerID == workerID {
+			sessions = append(sessions, session)
+		}
+	}
+	return sessions, nil
+}
+
 func TestNewCoordinatorServer(t *testing.T) {
 	registry := NewWorkerRegistry()
 	storage := newTestSessionStorage()

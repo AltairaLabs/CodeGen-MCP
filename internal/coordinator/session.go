@@ -26,6 +26,7 @@ type SessionStateStorage interface {
 	SetLastCompletedSequence(ctx context.Context, sessionID string, sequence uint64) error
 	GetNextSequence(ctx context.Context, sessionID string) (uint64, error)
 	ListSessions(ctx context.Context) ([]*Session, error)
+	ListSessionsByWorkerID(ctx context.Context, workerID string) ([]*Session, error)
 	UpdateSessionActivity(ctx context.Context, sessionID string) error
 }
 
@@ -147,6 +148,11 @@ func (sm *SessionManager) GetSession(sessionID string) (*Session, bool) {
 		return session, true
 	}
 	return nil, false
+}
+
+// GetSessionsByWorkerID retrieves all sessions assigned to a worker
+func (sm *SessionManager) GetSessionsByWorkerID(workerID string) ([]*Session, error) {
+	return sm.storage.ListSessionsByWorkerID(context.Background(), workerID)
 }
 
 // DeleteSession removes a session

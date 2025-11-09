@@ -343,6 +343,40 @@ func (s *InMemorySessionStateStorage) ListSessions(
 	return result, nil
 }
 
+// ListSessionsByWorkerID retrieves all sessions assigned to a specific worker
+func (s *InMemorySessionStateStorage) ListSessionsByWorkerID(
+	ctx context.Context,
+	workerID string,
+) ([]*coordinator.Session, error) {
+	if workerID == "" {
+		return []*coordinator.Session{}, nil
+	}
+
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	result := make([]*coordinator.Session, 0)
+	for _, session := range s.sessions {
+		if session.WorkerID == workerID {
+			// Return copies
+			sessionCopy := *session
+			if session.Metadata != nil {
+				sessionCopy.Metadata = make(map[string]string, len(session.Metadata))
+				for k, v := range session.Metadata {
+					sessionCopy.Metadata[k] = v
+				}
+			}
+			if session.TaskHistory != nil {
+				sessionCopy.TaskHistory = make([]string, len(session.TaskHistory))
+				copy(sessionCopy.TaskHistory, session.TaskHistory)
+			}
+			result = append(result, &sessionCopy)
+		}
+	}
+
+	return result, nil
+}
+
 // UpdateSessionActivity updates the LastActive timestamp for a session
 func (s *InMemorySessionStateStorage) UpdateSessionActivity(
 	ctx context.Context,
