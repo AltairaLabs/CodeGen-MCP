@@ -61,26 +61,22 @@ func main() {
 		log.Fatalf("Failed to create base workspace: %v", err)
 	}
 
-	// Create worker server
+	// Create worker client
+	// This handles all coordinator communication and manages worker components internally
 	// #nosec G115 - maxSessions is bounded by config validation (typically < 1000)
-	workerServer := worker.NewWorkerServer(workerID, int32(maxSessions), baseWorkspace)
-
-	// Create registration client
-	// Note: GRPCAddress is sent to coordinator but worker doesn't listen (legacy field)
-	regClient := worker.NewRegistrationClient(&worker.RegistrationConfig{
+	client := worker.NewClient(&worker.Config{
 		WorkerID:        workerID,
-		GRPCAddress:     "", // Worker doesn't listen, all communication via task stream
 		CoordinatorAddr: coordinatorAddr,
 		Version:         workerVersion,
-		SessionPool:     workerServer.GetSessionPool(),
-		TaskExecutor:    workerServer.GetTaskExecutor(),
+		MaxSessions:     int32(maxSessions),
+		BaseWorkspace:   baseWorkspace,
 		Logger:          logger,
 	})
 
-	// Start registration with coordinator
+	// Start worker and connect to coordinator
 	ctx := context.Background()
-	if err := regClient.Start(ctx); err != nil {
-		logger.Error("Failed to register with coordinator", "error", err)
+	if err := client.Start(ctx); err != nil {
+		logger.Error("Failed to start worker", "error", err)
 		log.Fatalf("Cannot start worker without coordinator connection")
 	}
 
@@ -94,13 +90,13 @@ func main() {
 	<-shutdownCh
 	logger.Info("Received shutdown signal, starting graceful shutdown")
 
-	// Deregister from coordinator
+	// Stop worker and deregister from coordinator
 	const shutdownTimeout = 10 * time.Second
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 	defer cancel()
 
-	if err := regClient.Stop(shutdownCtx); err != nil {
-		logger.Warn("Error during deregistration", "error", err)
+	if err := client.Stop(shutdownCtx); err != nil {
+		logger.Warn("Error during shutdown", "error", err)
 	}
 
 	logger.Info("Worker shutdown complete")

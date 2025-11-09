@@ -45,6 +45,7 @@ type WorkerSession struct {
 	RecentTasks      []string // Track recent task IDs (max 10)
 	LastCheckpointID string   // Last successful checkpoint ID
 	ArtifactIDs      []string // Artifact IDs created in this session
+	LastCompletedSeq uint64   // Last completed task sequence number (for deduplication)
 	mu               sync.RWMutex
 	maxRecentTasks   int
 }
@@ -406,4 +407,35 @@ func (sp *SessionPool) initializeSession(ctx context.Context, session *WorkerSes
 // generateSessionID generates a unique session identifier
 func generateSessionID() string {
 	return fmt.Sprintf("session-%d", time.Now().UnixNano())
+}
+
+// GetLastCompletedSequence returns the last completed sequence number for a session
+func (sp *SessionPool) GetLastCompletedSequence(sessionID string) (uint64, error) {
+	sp.mu.RLock()
+	session, exists := sp.sessions[sessionID]
+	sp.mu.RUnlock()
+
+	if !exists {
+		return 0, fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	session.mu.RLock()
+	defer session.mu.RUnlock()
+	return session.LastCompletedSeq, nil
+}
+
+// SetLastCompletedSequence updates the last completed sequence number for a session
+func (sp *SessionPool) SetLastCompletedSequence(sessionID string, sequence uint64) error {
+	sp.mu.RLock()
+	session, exists := sp.sessions[sessionID]
+	sp.mu.RUnlock()
+
+	if !exists {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.LastCompletedSeq = sequence
+	return nil
 }

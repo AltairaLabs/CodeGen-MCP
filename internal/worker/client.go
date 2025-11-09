@@ -14,8 +14,9 @@ import (
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
-// RegistrationClient handles worker registration and lifecycle with the coordinator
-type RegistrationClient struct {
+// Client is the main worker implementation that handles coordinator communication,
+// session management, and task execution.
+type Client struct {
 	workerID        string
 	grpcAddress     string // Worker's own gRPC address (for coordinator to connect back)
 	coordinatorAddr string
@@ -44,35 +45,38 @@ type RegistrationClient struct {
 	baseReconnectDelay time.Duration
 }
 
-// RegistrationConfig holds configuration for the registration client
-type RegistrationConfig struct {
+// Config holds configuration for the worker client
+type Config struct {
 	WorkerID        string
-	GRPCAddress     string // Worker's gRPC address (e.g., "localhost:50051")
 	CoordinatorAddr string
 	Version         string
-	SessionPool     *SessionPool
-	TaskExecutor    *TaskExecutor
+	MaxSessions     int32
+	BaseWorkspace   string
 	Logger          *slog.Logger
 }
 
-// NewRegistrationClient creates a new registration client
-func NewRegistrationClient(cfg *RegistrationConfig) *RegistrationClient {
+// NewClient creates a new worker client with all components
+func NewClient(cfg *Config) *Client {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
+
+	// Create worker components
+	sessionPool := NewSessionPool(cfg.WorkerID, cfg.MaxSessions, cfg.BaseWorkspace)
+	taskExecutor := NewTaskExecutor(sessionPool)
 
 	const (
 		defaultMaxReconnectDelay  = 5 * time.Minute
 		defaultBaseReconnectDelay = 1 * time.Second
 	)
 
-	return &RegistrationClient{
+	return &Client{
 		workerID:           cfg.WorkerID,
-		grpcAddress:        cfg.GRPCAddress,
+		grpcAddress:        "", // Worker doesn't listen, all communication via task stream
 		coordinatorAddr:    cfg.CoordinatorAddr,
 		version:            cfg.Version,
-		sessionPool:        cfg.SessionPool,
-		taskExecutor:       cfg.TaskExecutor,
+		sessionPool:        sessionPool,
+		taskExecutor:       taskExecutor,
 		logger:             cfg.Logger,
 		stopChan:           make(chan struct{}),
 		doneChan:           make(chan struct{}),
@@ -82,7 +86,7 @@ func NewRegistrationClient(cfg *RegistrationConfig) *RegistrationClient {
 }
 
 // Start begins the registration and heartbeat process
-func (rc *RegistrationClient) Start(ctx context.Context) error {
+func (rc *Client) Start(ctx context.Context) error {
 	rc.logger.Info("Starting registration client",
 		"worker_id", rc.workerID,
 		"coordinator", rc.coordinatorAddr)
@@ -111,7 +115,7 @@ func (rc *RegistrationClient) Start(ctx context.Context) error {
 }
 
 // Stop gracefully stops the registration client and deregisters
-func (rc *RegistrationClient) Stop(ctx context.Context) error {
+func (rc *Client) Stop(ctx context.Context) error {
 	rc.logger.Info("Stopping registration client", "worker_id", rc.workerID)
 
 	// Check if we were ever started
@@ -146,7 +150,7 @@ func (rc *RegistrationClient) Stop(ctx context.Context) error {
 	rc.logger.Info("Registration client stopped")
 	return nil
 } // connectAndRegister establishes connection and registers with coordinator
-func (rc *RegistrationClient) connectAndRegister(ctx context.Context) error {
+func (rc *Client) connectAndRegister(ctx context.Context) error {
 	// Establish gRPC connection
 	conn, err := grpc.NewClient(
 		rc.coordinatorAddr,
@@ -224,7 +228,7 @@ func (rc *RegistrationClient) connectAndRegister(ctx context.Context) error {
 }
 
 // heartbeatLoop sends periodic heartbeats to the coordinator
-func (rc *RegistrationClient) heartbeatLoop() {
+func (rc *Client) heartbeatLoop() {
 	defer close(rc.doneChan)
 
 	ticker := time.NewTicker(rc.heartbeatInterval)
@@ -271,7 +275,7 @@ func (rc *RegistrationClient) heartbeatLoop() {
 }
 
 // sendHeartbeat sends a single heartbeat to the coordinator
-func (rc *RegistrationClient) sendHeartbeat(ctx context.Context) error {
+func (rc *Client) sendHeartbeat(ctx context.Context) error {
 	if rc.lifecycleClient == nil {
 		return fmt.Errorf("not connected to coordinator")
 	}
@@ -305,7 +309,7 @@ func (rc *RegistrationClient) sendHeartbeat(ctx context.Context) error {
 }
 
 // openTaskStream opens the bidirectional task stream with the coordinator
-func (rc *RegistrationClient) openTaskStream(ctx context.Context) error {
+func (rc *Client) openTaskStream(ctx context.Context) error {
 	if rc.lifecycleClient == nil {
 		return fmt.Errorf("not connected to coordinator")
 	}
@@ -336,7 +340,7 @@ func (rc *RegistrationClient) openTaskStream(ctx context.Context) error {
 }
 
 // taskStreamLoop listens for task assignments from coordinator and executes them
-func (rc *RegistrationClient) taskStreamLoop() {
+func (rc *Client) taskStreamLoop() {
 	rc.logger.Info("Starting task stream listener")
 
 	for {
@@ -376,29 +380,74 @@ func (rc *RegistrationClient) taskStreamLoop() {
 }
 
 // handleTaskAssignment executes a task assignment and sends the response back
-func (rc *RegistrationClient) handleTaskAssignment(assignment *protov1.TaskAssignment) {
+func (rc *Client) handleTaskAssignment(assignment *protov1.TaskAssignment) {
 	taskID := assignment.TaskId
+	sessionID := assignment.SessionId
+	sequence := assignment.Sequence
+
 	rc.logger.Info("Received task assignment",
 		"task_id", taskID,
 		"tool_name", assignment.ToolName,
-		"session_id", assignment.SessionId)
+		"session_id", sessionID,
+		"sequence", sequence)
+
+	// Check sequence number for deduplication (if sequence tracking is enabled)
+	if sequence > 0 {
+		lastSeq, err := rc.sessionPool.GetLastCompletedSequence(sessionID)
+		if err != nil {
+			rc.logger.Warn("Could not get last completed sequence, continuing without deduplication",
+				"session_id", sessionID,
+				"error", err)
+		} else if sequence <= lastSeq {
+			// Task already completed - skip execution and return success
+			rc.logger.Warn("Skipping duplicate task execution",
+				"task_id", taskID,
+				"sequence", sequence,
+				"last_completed", lastSeq)
+
+			// Send success response (task was already completed)
+			successResp := &protov1.TaskStreamMessage{
+				Message: &protov1.TaskStreamMessage_Response{
+					Response: &protov1.TaskStreamResponse{
+						TaskId: taskID,
+						Payload: &protov1.TaskStreamResponse_Result{
+							Result: &protov1.TaskStreamResult{
+								Status:   protov1.TaskStreamResult_STATUS_SUCCESS,
+								Outputs:  map[string]string{"message": "Task already completed (duplicate)"},
+								Sequence: sequence,
+							},
+						},
+					},
+				},
+			}
+
+			if err := rc.taskStream.Send(successResp); err != nil {
+				rc.logger.Error("Failed to send duplicate task response", "error", err)
+			}
+			return
+		}
+	}
 
 	// Convert to TaskRequest format for task executor
 	req := &protov1.TaskRequest{
 		TaskId:      taskID,
-		SessionId:   assignment.SessionId,
+		SessionId:   sessionID,
 		ToolName:    assignment.ToolName,
 		Arguments:   assignment.Arguments,
 		Context:     assignment.Context,
 		Constraints: assignment.Constraints,
+		Sequence:    sequence,
 	}
 
 	// Create a mock stream for collecting responses
 	responseCollector := &taskResponseCollector{
-		taskID:     taskID,
-		responses:  make([]*protov1.TaskStreamResponse, 0),
-		taskStream: rc.taskStream,
-		logger:     rc.logger,
+		taskID:      taskID,
+		sequence:    sequence,
+		sessionID:   sessionID,
+		responses:   make([]*protov1.TaskStreamResponse, 0),
+		taskStream:  rc.taskStream,
+		sessionPool: rc.sessionPool,
+		logger:      rc.logger,
 	}
 
 	// Execute the task
@@ -435,7 +484,7 @@ func (rc *RegistrationClient) handleTaskAssignment(assignment *protov1.TaskAssig
 }
 
 // handleSessionCreate handles a session creation request from the coordinator
-func (rc *RegistrationClient) handleSessionCreate(req *protov1.SessionCreateRequest) {
+func (rc *Client) handleSessionCreate(req *protov1.SessionCreateRequest) {
 	sessionID := req.SessionId
 	rc.logger.Info("Received session creation request",
 		"session_id", sessionID,
@@ -477,10 +526,13 @@ func (rc *RegistrationClient) handleSessionCreate(req *protov1.SessionCreateRequ
 
 // taskResponseCollector adapts the task executor stream interface to task stream messages
 type taskResponseCollector struct {
-	taskID     string
-	responses  []*protov1.TaskStreamResponse
-	taskStream protov1.WorkerLifecycle_TaskStreamClient
-	logger     *slog.Logger
+	taskID      string
+	sequence    uint64
+	sessionID   string
+	responses   []*protov1.TaskStreamResponse
+	taskStream  protov1.WorkerLifecycle_TaskStreamClient
+	sessionPool *SessionPool
+	logger      *slog.Logger
 }
 
 func (t *taskResponseCollector) Send(resp *protov1.TaskResponse) error {
@@ -520,7 +572,22 @@ func (t *taskResponseCollector) Send(resp *protov1.TaskResponse) error {
 					PeakUsage:   payload.Result.Metadata.PeakUsage,
 					ExitCode:    payload.Result.Metadata.ExitCode,
 				},
+				Sequence: t.sequence, // Include sequence for coordinator tracking
 			},
+		}
+
+		// Update last completed sequence if this task succeeded and sequence tracking is enabled
+		if t.sequence > 0 && payload.Result.Status == protov1.TaskResult_STATUS_SUCCESS {
+			if err := t.sessionPool.SetLastCompletedSequence(t.sessionID, t.sequence); err != nil {
+				t.logger.Warn("Failed to update last completed sequence",
+					"session_id", t.sessionID,
+					"sequence", t.sequence,
+					"error", err)
+			} else {
+				t.logger.Info("Updated last completed sequence",
+					"session_id", t.sessionID,
+					"sequence", t.sequence)
+			}
 		}
 	case *protov1.TaskResponse_Error:
 		streamResp.Payload = &protov1.TaskStreamResponse_Error{
@@ -568,7 +635,7 @@ func (t *taskResponseCollector) SetTrailer(metadata.MD) {
 }
 
 // getWorkerStatus builds the current worker status
-func (rc *RegistrationClient) getWorkerStatus(capacity *protov1.SessionCapacity) *protov1.WorkerStatus {
+func (rc *Client) getWorkerStatus(capacity *protov1.SessionCapacity) *protov1.WorkerStatus {
 	// Determine state based on capacity
 	state := protov1.WorkerStatus_STATE_IDLE
 	if capacity.ActiveSessions > 0 {
@@ -594,7 +661,7 @@ func (rc *RegistrationClient) getWorkerStatus(capacity *protov1.SessionCapacity)
 }
 
 // deregister notifies the coordinator that this worker is shutting down
-func (rc *RegistrationClient) deregister(ctx context.Context) error {
+func (rc *Client) deregister(ctx context.Context) error {
 	if rc.lifecycleClient == nil {
 		return fmt.Errorf("not connected to coordinator")
 	}
@@ -619,7 +686,7 @@ func (rc *RegistrationClient) deregister(ctx context.Context) error {
 }
 
 // reconnect attempts to reconnect to the coordinator with exponential backoff
-func (rc *RegistrationClient) reconnect(ctx context.Context) error {
+func (rc *Client) reconnect(ctx context.Context) error {
 	rc.logger.Info("Attempting to reconnect to coordinator")
 
 	// Close existing connection

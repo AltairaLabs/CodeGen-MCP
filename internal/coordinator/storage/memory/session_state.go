@@ -16,7 +16,7 @@ var (
 	errSessionNotFound = errors.New("session not found")
 )
 
-// InMemorySessionStateStorage implements SessionStateStorage using in-memory maps
+// InMemorySessionStateStorage implements coordinator.SessionStateStorage using in-memory maps
 type InMemorySessionStateStorage struct {
 	mu                    sync.RWMutex
 	sessions              map[string]*coordinator.Session

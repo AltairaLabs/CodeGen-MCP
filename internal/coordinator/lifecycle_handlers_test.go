@@ -10,9 +10,112 @@ import (
 	"google.golang.org/grpc"
 )
 
+// testSessionStorage is a simple in-memory implementation for testing
+type testSessionStorage struct {
+	sessions map[string]*Session
+}
+
+func newTestSessionStorage() *testSessionStorage {
+	return &testSessionStorage{
+		sessions: make(map[string]*Session),
+	}
+}
+
+func (s *testSessionStorage) CreateSession(ctx context.Context, session *Session) error {
+	s.sessions[session.ID] = session
+	return nil
+}
+
+func (s *testSessionStorage) GetSession(ctx context.Context, sessionID string) (*Session, error) {
+	session, ok := s.sessions[sessionID]
+	if !ok {
+		return nil, nil
+	}
+	return session, nil
+}
+
+func (s *testSessionStorage) UpdateSessionState(ctx context.Context, sessionID string, state SessionState, message string) error {
+	if session, ok := s.sessions[sessionID]; ok {
+		session.State = state
+		session.StateMessage = message
+	}
+	return nil
+}
+
+func (s *testSessionStorage) SetSessionMetadata(ctx context.Context, sessionID string, metadata map[string]string) error {
+	if session, ok := s.sessions[sessionID]; ok {
+		if session.Metadata == nil {
+			session.Metadata = make(map[string]string)
+		}
+		for k, v := range metadata {
+			session.Metadata[k] = v
+		}
+	}
+	return nil
+}
+
+func (s *testSessionStorage) GetSessionMetadata(ctx context.Context, sessionID string) (map[string]string, error) {
+	if session, ok := s.sessions[sessionID]; ok {
+		return session.Metadata, nil
+	}
+	return make(map[string]string), nil
+}
+
+func (s *testSessionStorage) GetSessionByConversationID(ctx context.Context, conversationID string) (*Session, error) {
+	for _, session := range s.sessions {
+		if session.ConversationID == conversationID {
+			return session, nil
+		}
+	}
+	return nil, nil
+}
+
+func (s *testSessionStorage) DeleteSession(ctx context.Context, sessionID string) error {
+	delete(s.sessions, sessionID)
+	return nil
+}
+
+func (s *testSessionStorage) GetLastCompletedSequence(ctx context.Context, sessionID string) (uint64, error) {
+	if session, ok := s.sessions[sessionID]; ok {
+		return session.LastCompletedSeq, nil
+	}
+	return 0, nil
+}
+
+func (s *testSessionStorage) SetLastCompletedSequence(ctx context.Context, sessionID string, sequence uint64) error {
+	if session, ok := s.sessions[sessionID]; ok {
+		session.LastCompletedSeq = sequence
+	}
+	return nil
+}
+
+func (s *testSessionStorage) GetNextSequence(ctx context.Context, sessionID string) (uint64, error) {
+	if session, ok := s.sessions[sessionID]; ok {
+		session.NextSequence++
+		return session.NextSequence, nil
+	}
+	return 0, nil
+}
+
+func (s *testSessionStorage) ListSessions(ctx context.Context) ([]*Session, error) {
+	sessions := make([]*Session, 0, len(s.sessions))
+	for _, session := range s.sessions {
+		sessions = append(sessions, session)
+	}
+	return sessions, nil
+}
+
+func (s *testSessionStorage) UpdateSessionActivity(ctx context.Context, sessionID string) error {
+	if session, ok := s.sessions[sessionID]; ok {
+		session.LastActive = time.Now()
+	}
+	return nil
+}
+
 func TestNewCoordinatorServer(t *testing.T) {
 	registry := NewWorkerRegistry()
-	sessionMgr := NewSessionManager(registry)
+	storage := newTestSessionStorage()
+	sessionMgr := NewSessionManager(storage, registry)
 
 	// Test with logger
 	logger := slog.Default()

@@ -25,6 +25,7 @@ message TaskRequest {
   map<string, string> arguments = 4;  // Tool arguments (JSON-encoded)
   TaskContext context = 5;
   ExecutionConstraints constraints = 6;
+  uint64 sequence = 7;             // Monotonic sequence number for deduplication (0 = no tracking)
 }
 
 message TaskContext {

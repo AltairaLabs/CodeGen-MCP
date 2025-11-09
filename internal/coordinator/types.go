@@ -54,6 +54,25 @@ type TaskResult struct {
 // TaskArgs is a convenience alias for task argument maps
 type TaskArgs map[string]interface{}
 
+// QueuedTask represents a task in the queue with retry and sequencing support
+type QueuedTask struct {
+	ID             string        // Unique task ID
+	SessionID      string        // Target session ID
+	ConversationID string        // External conversation ID (for future use)
+	ToolName       string        // Tool to execute
+	Args           TaskArgs      // Tool arguments
+	Sequence       uint64        // Monotonic sequence number per session
+	State          string        // Current state (queued, dispatched, completed, failed, retrying)
+	RetryCount     int           // Number of retry attempts
+	MaxRetries     int           // Maximum retry attempts
+	CreatedAt      time.Time     // When task was created
+	DispatchedAt   *time.Time    // When task was sent to worker (nil if not dispatched)
+	CompletedAt    *time.Time    // When task completed (nil if not completed)
+	Timeout        time.Duration // Max time to wait in queue
+	Error          string        // Last error message
+	NextRetryAt    *time.Time    // When to retry next (nil if not retrying)
+}
+
 // AuditEntry represents a logged event for provenance tracking
 type AuditEntry struct {
 	Timestamp   time.Time

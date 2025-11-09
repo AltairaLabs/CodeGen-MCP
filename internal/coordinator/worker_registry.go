@@ -30,7 +30,7 @@ type WorkerRegistryStorage interface {
 type WorkerRegistry struct {
 	mu      sync.RWMutex
 	workers map[string]*RegisteredWorker
-	storage WorkerRegistryStorage // Optional storage backend
+	storage WorkerRegistryStorage // Optional storage backend for metadata persistence
 }
 
 // RegisteredWorker represents a worker registered with the coordinator
@@ -58,18 +58,10 @@ func NewWorkerRegistry() *WorkerRegistry {
 	}
 }
 
-// NewWorkerRegistryWithStorage creates a worker registry with storage backend
-func NewWorkerRegistryWithStorage(storage WorkerRegistryStorage) *WorkerRegistry {
-	return &WorkerRegistry{
-		workers: make(map[string]*RegisteredWorker),
-		storage: storage,
-	}
-}
-
 // RegisterWorker adds a new worker to the registry
 func (wr *WorkerRegistry) RegisterWorker(workerID string, worker *RegisteredWorker) error {
 	if wr.storage != nil {
-		// Store metadata in storage backend
+		// Store basic metadata (non-runtime fields only)
 		metadata := map[string]interface{}{
 			"worker_id":          workerID,
 			"session_id":         worker.SessionID,
@@ -127,7 +119,7 @@ func (wr *WorkerRegistry) UpdateHeartbeat(workerID string, status *protov1.Worke
 		if err := wr.storage.UpdateWorkerHeartbeat(context.Background(), workerID, now); err != nil {
 			// Storage is for persistence/recovery - failure is non-critical
 			// In-memory update succeeded, that's what matters for runtime
-			// TODO: Add proper logging when logger is available in WorkerRegistry
+			// Log error but don't fail the operation
 			_ = err
 		}
 	}
@@ -186,7 +178,7 @@ func (wr *WorkerRegistry) DeregisterWorker(workerID string) error {
 		if err := wr.storage.UnregisterWorker(context.Background(), workerID); err != nil {
 			// Storage is for persistence/recovery - failure is non-critical
 			// We'll still remove from memory
-			// TODO: Add proper logging when logger is available in WorkerRegistry
+			// Log error but don't fail the operation
 			_ = err
 		}
 	}

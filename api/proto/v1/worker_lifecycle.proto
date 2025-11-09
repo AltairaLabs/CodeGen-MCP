@@ -111,6 +111,7 @@ message TaskAssignment {
   map<string, string> arguments = 4;
   TaskContext context = 5;
   ExecutionConstraints constraints = 6;
+  uint64 sequence = 7;             // Monotonic sequence number for deduplication (0 = no tracking)
 }
 
 // TaskStreamResponse is sent by worker to coordinator
@@ -156,6 +157,7 @@ message TaskStreamResult {
   map<string, string> outputs = 2;
   repeated string artifacts = 3;
   TaskExecutionMetadata metadata = 4;
+  uint64 sequence = 5;             // Sequence number of completed task (for deduplication tracking)
 }
 
 message TaskExecutionMetadata {

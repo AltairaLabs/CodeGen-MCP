@@ -108,7 +108,7 @@ func startMockServer(tb testingTB, mock *mockLifecycleServer) (string, func()) {
 	return lis.Addr().String(), cleanup
 }
 
-func TestRegistrationClient_SuccessfulRegistration(t *testing.T) {
+func TestClient_SuccessfulRegistration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -118,14 +118,13 @@ func TestRegistrationClient_SuccessfulRegistration(t *testing.T) {
 	defer cleanup()
 
 	// Create session pool
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
 
 	// Create registration client
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -160,7 +159,7 @@ func TestRegistrationClient_SuccessfulRegistration(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_RegistrationRejected(t *testing.T) {
+func TestClient_RegistrationRejected(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -176,12 +175,11 @@ func TestRegistrationClient_RegistrationRejected(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -198,7 +196,7 @@ func TestRegistrationClient_RegistrationRejected(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_HeartbeatFailure(t *testing.T) {
+func TestClient_HeartbeatFailure(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -219,12 +217,11 @@ func TestRegistrationClient_HeartbeatFailure(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -247,7 +244,7 @@ func TestRegistrationClient_HeartbeatFailure(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_CapacityReporting(t *testing.T) {
+func TestClient_CapacityReporting(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -265,12 +262,11 @@ func TestRegistrationClient_CapacityReporting(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -301,7 +297,7 @@ func TestRegistrationClient_CapacityReporting(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_WorkerStatus(t *testing.T) {
+func TestClient_WorkerStatus(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -319,12 +315,11 @@ func TestRegistrationClient_WorkerStatus(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -356,18 +351,17 @@ func TestRegistrationClient_WorkerStatus(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_ConnectionFailure(t *testing.T) {
+func TestClient_ConnectionFailure(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
 
 	// Try to connect to a port that's not listening
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: "localhost:9999",
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -380,7 +374,7 @@ func TestRegistrationClient_ConnectionFailure(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_ValidatesWorkerID(t *testing.T) {
+func TestClient_ValidatesWorkerID(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -399,13 +393,12 @@ func TestRegistrationClient_ValidatesWorkerID(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
 	expectedID := "test-worker-123"
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        expectedID,
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -424,7 +417,7 @@ func TestRegistrationClient_ValidatesWorkerID(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_SendsCapabilities(t *testing.T) {
+func TestClient_SendsCapabilities(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -443,12 +436,11 @@ func TestRegistrationClient_SendsCapabilities(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -483,7 +475,7 @@ func TestRegistrationClient_SendsCapabilities(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_DeregistrationValidation(t *testing.T) {
+func TestClient_DeregistrationValidation(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -500,12 +492,11 @@ func TestRegistrationClient_DeregistrationValidation(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -531,13 +522,12 @@ func TestRegistrationClient_DeregistrationValidation(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_StopWithoutStart(t *testing.T) {
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+func TestClient_StopWithoutStart(t *testing.T) {
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: "localhost:9999",
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -549,7 +539,7 @@ func TestRegistrationClient_StopWithoutStart(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_ReconnectionSuccess(t *testing.T) {
+func TestClient_ReconnectionSuccess(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -580,12 +570,11 @@ func TestRegistrationClient_ReconnectionSuccess(t *testing.T) {
 	// Close listener initially to simulate unavailable coordinator
 	lis.Close()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 	client.baseReconnectDelay = 100 * time.Millisecond // Speed up test
@@ -614,32 +603,30 @@ func TestRegistrationClient_ReconnectionSuccess(t *testing.T) {
 	_ = client.Start(ctx)
 }
 
-func TestNewRegistrationClient(t *testing.T) {
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-
+func TestNewClient(t *testing.T) {
 	tests := []struct {
 		name   string
-		config *RegistrationConfig
+		config *Config
 	}{
 		{
 			name: "with logger",
-			config: &RegistrationConfig{
+			config: &Config{
 				WorkerID:        "test-worker-1",
-				GRPCAddress:     "localhost:50051",
 				CoordinatorAddr: "localhost:50050",
 				Version:         "1.0.0",
-				SessionPool:     sessionPool,
+				MaxSessions:     5,
+				BaseWorkspace:   t.TempDir(),
 				Logger:          slog.Default(),
 			},
 		},
 		{
 			name: "without logger",
-			config: &RegistrationConfig{
+			config: &Config{
 				WorkerID:        "test-worker-2",
-				GRPCAddress:     "localhost:50052",
 				CoordinatorAddr: "localhost:50050",
 				Version:         "1.0.0",
-				SessionPool:     sessionPool,
+				MaxSessions:     5,
+				BaseWorkspace:   t.TempDir(),
 				Logger:          nil, // Should use default
 			},
 		},
@@ -647,18 +634,19 @@ func TestNewRegistrationClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			client := NewRegistrationClient(tt.config)
+			client := NewClient(tt.config)
 
 			if client == nil {
-				t.Fatal("NewRegistrationClient returned nil")
+				t.Fatal("NewClient returned nil")
 			}
 
 			if client.workerID != tt.config.WorkerID {
 				t.Errorf("Expected worker ID %s, got %s", tt.config.WorkerID, client.workerID)
 			}
 
-			if client.grpcAddress != tt.config.GRPCAddress {
-				t.Errorf("Expected gRPC address %s, got %s", tt.config.GRPCAddress, client.grpcAddress)
+			// grpcAddress should be empty (worker doesn't listen)
+			if client.grpcAddress != "" {
+				t.Errorf("Expected empty gRPC address, got %s", client.grpcAddress)
 			}
 
 			if client.coordinatorAddr != tt.config.CoordinatorAddr {
@@ -671,6 +659,15 @@ func TestNewRegistrationClient(t *testing.T) {
 
 			if client.logger == nil {
 				t.Error("Logger should never be nil")
+			}
+
+			// Verify components are created
+			if client.sessionPool == nil {
+				t.Error("sessionPool should be initialized")
+			}
+
+			if client.taskExecutor == nil {
+				t.Error("taskExecutor should be initialized")
 			}
 
 			if client.stopChan == nil {
@@ -692,7 +689,7 @@ func TestNewRegistrationClient(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_RegistrationRequestFields(t *testing.T) {
+func TestClient_RegistrationRequestFields(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -711,16 +708,14 @@ func TestRegistrationClient_RegistrationRequestFields(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool(testWorkerBase, testMaxSessions, t.TempDir())
 	expectedVersion := "1.2.3"
-	expectedGRPCAddr := "localhost:50051"
 
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        testWorkerID,
-		GRPCAddress:     expectedGRPCAddr,
 		CoordinatorAddr: addr,
 		Version:         expectedVersion,
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
+		BaseWorkspace:   t.TempDir(),
 		Logger:          slog.Default(),
 	})
 
@@ -743,9 +738,9 @@ func TestRegistrationClient_RegistrationRequestFields(t *testing.T) {
 		t.Errorf("Expected version %s, got %s", expectedVersion, receivedReq.Version)
 	}
 
-	// Verify gRPC address
-	if receivedReq.GrpcAddress != expectedGRPCAddr {
-		t.Errorf("Expected gRPC address %s, got %s", expectedGRPCAddr, receivedReq.GrpcAddress)
+	// Verify gRPC address is empty (worker doesn't listen)
+	if receivedReq.GrpcAddress != "" {
+		t.Errorf("Expected empty gRPC address, got %s", receivedReq.GrpcAddress)
 	}
 
 	// Verify capabilities
@@ -775,7 +770,7 @@ func TestRegistrationClient_RegistrationRequestFields(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_DeregistrationFailed(t *testing.T) {
+func TestClient_DeregistrationFailed(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -790,12 +785,11 @@ func TestRegistrationClient_DeregistrationFailed(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -810,7 +804,7 @@ func TestRegistrationClient_DeregistrationFailed(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_WorkerStatus_WithSessions(t *testing.T) {
+func TestClient_WorkerStatus_WithSessions(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -828,25 +822,16 @@ func TestRegistrationClient_WorkerStatus_WithSessions(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-
-	// Create a session to change state
-	ctx := context.Background()
-	_, err := sessionPool.CreateSession(ctx, &protov1.CreateSessionRequest{
-		WorkspaceId: "test-workspace",
-	})
-	if err != nil {
-		t.Fatalf("Failed to create session: %v", err)
-	}
-
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
+		BaseWorkspace:   t.TempDir(),
 		Logger:          slog.Default(),
 	})
 
+	ctx := context.Background()
 	if err := client.Start(ctx); err != nil {
 		t.Fatalf(errMsgFailedStart, err)
 	}
@@ -856,7 +841,15 @@ func TestRegistrationClient_WorkerStatus_WithSessions(t *testing.T) {
 		}
 	}()
 
-	// Wait for heartbeat
+	// Create a session to change the worker status to BUSY
+	_, err := client.sessionPool.CreateSession(ctx, &protov1.CreateSessionRequest{
+		WorkspaceId: "test-workspace",
+	})
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+
+	// Wait for heartbeat with session active
 	time.Sleep(1500 * time.Millisecond)
 
 	// Verify status reflects active session
@@ -876,7 +869,7 @@ func TestRegistrationClient_WorkerStatus_WithSessions(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_HeartbeatCommands(t *testing.T) {
+func TestClient_HeartbeatCommands(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -893,12 +886,11 @@ func TestRegistrationClient_HeartbeatCommands(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -922,7 +914,7 @@ func TestRegistrationClient_HeartbeatCommands(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_ContinueServingFalse(t *testing.T) {
+func TestClient_ContinueServingFalse(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -938,12 +930,11 @@ func TestRegistrationClient_ContinueServingFalse(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -966,7 +957,7 @@ func TestRegistrationClient_ContinueServingFalse(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_Reconnect_AfterHeartbeatFailures(t *testing.T) {
+func TestClient_Reconnect_AfterHeartbeatFailures(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -1004,12 +995,11 @@ func TestRegistrationClient_Reconnect_AfterHeartbeatFailures(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 	client.baseReconnectDelay = 50 * time.Millisecond
@@ -1032,7 +1022,7 @@ func TestRegistrationClient_Reconnect_AfterHeartbeatFailures(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_Reconnect_MaxAttemptsExhausted(t *testing.T) {
+func TestClient_Reconnect_MaxAttemptsExhausted(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -1063,12 +1053,11 @@ func TestRegistrationClient_Reconnect_MaxAttemptsExhausted(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 	client.baseReconnectDelay = 5 * time.Millisecond
@@ -1091,7 +1080,7 @@ func TestRegistrationClient_Reconnect_MaxAttemptsExhausted(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_Reconnect_ExponentialBackoff(t *testing.T) {
+func TestClient_Reconnect_ExponentialBackoff(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -1141,12 +1130,11 @@ func TestRegistrationClient_Reconnect_ExponentialBackoff(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 	client.baseReconnectDelay = 100 * time.Millisecond
@@ -1178,7 +1166,7 @@ func TestRegistrationClient_Reconnect_ExponentialBackoff(t *testing.T) {
 	}
 }
 
-func TestRegistrationClient_HeartbeatFailure_TriggersReconnect(t *testing.T) {
+func TestClient_HeartbeatFailure_TriggersReconnect(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -1203,12 +1191,11 @@ func TestRegistrationClient_HeartbeatFailure_TriggersReconnect(t *testing.T) {
 	addr, cleanup := startMockServer(t, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 	client.baseReconnectDelay = 50 * time.Millisecond
@@ -1234,18 +1221,18 @@ func TestRegistrationClient_HeartbeatFailure_TriggersReconnect(t *testing.T) {
 
 // Unit tests that run in short mode (no network required)
 
-func TestRegistrationClientGetWorkerStatusIdle(t *testing.T) {
+func TestClientGetWorkerStatusIdle(t *testing.T) {
 	// Test worker status when idle (no active sessions)
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "worker-1",
 		CoordinatorAddr: "localhost:50051",
 		Version:         "1.0.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
+		BaseWorkspace:   t.TempDir(),
 		Logger:          slog.Default(),
 	})
 
-	capacity := sessionPool.GetCapacity()
+	capacity := client.sessionPool.GetCapacity()
 	status := client.getWorkerStatus(capacity)
 
 	if status.State != protov1.WorkerStatus_STATE_IDLE {
@@ -1278,20 +1265,20 @@ func TestRegistrationClientGetWorkerStatusIdle(t *testing.T) {
 	}
 }
 
-func TestRegistrationClientGetWorkerStatusWithMultipleSessions(t *testing.T) {
+func TestClientGetWorkerStatusWithMultipleSessions(t *testing.T) {
 	// Test worker status calculation with multiple sessions
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
 
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "worker-1",
 		CoordinatorAddr: "localhost:50051",
 		Version:         "1.0.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
+		BaseWorkspace:   t.TempDir(),
 		Logger:          slog.Default(),
 	})
 
 	// Test with empty capacity
-	capacity := sessionPool.GetCapacity()
+	capacity := client.sessionPool.GetCapacity()
 	status := client.getWorkerStatus(capacity)
 
 	// Should be idle with no sessions
@@ -1309,14 +1296,13 @@ func TestRegistrationClientGetWorkerStatusWithMultipleSessions(t *testing.T) {
 	}
 }
 
-func TestRegistrationClientStopChanInitialized(t *testing.T) {
+func TestClientStopChanInitialized(t *testing.T) {
 	// Test that stopChan is properly initialized
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "worker-1",
 		CoordinatorAddr: "localhost:50051",
 		Version:         "1.0.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -1329,14 +1315,13 @@ func TestRegistrationClientStopChanInitialized(t *testing.T) {
 	}
 }
 
-func TestRegistrationClientReconnectionDelayDefaults(t *testing.T) {
+func TestClientReconnectionDelayDefaults(t *testing.T) {
 	// Test that reconnection delays are properly initialized with defaults
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "worker-1",
 		CoordinatorAddr: "localhost:50051",
 		Version:         "1.0.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -1353,14 +1338,13 @@ func TestRegistrationClientReconnectionDelayDefaults(t *testing.T) {
 	}
 }
 
-func TestRegistrationClientChannelsInitialized(t *testing.T) {
+func TestClientChannelsInitialized(t *testing.T) {
 	// Test that all channels are properly initialized
-	sessionPool := NewSessionPool("test-worker", 5, t.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "worker-1",
 		CoordinatorAddr: "localhost:50051",
 		Version:         "1.0.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
 		Logger:          slog.Default(),
 	})
 
@@ -1373,17 +1357,17 @@ func TestRegistrationClientChannelsInitialized(t *testing.T) {
 	}
 }
 
-func BenchmarkRegistrationClient_Heartbeat(b *testing.B) {
+func BenchmarkClient_Heartbeat(b *testing.B) {
 	mock := &mockLifecycleServer{}
 	addr, cleanup := startMockServer(b, mock)
 	defer cleanup()
 
-	sessionPool := NewSessionPool("test-worker", 5, b.TempDir())
-	client := NewRegistrationClient(&RegistrationConfig{
+	client := NewClient(&Config{
 		WorkerID:        "test-worker-1",
 		CoordinatorAddr: addr,
 		Version:         "0.1.0",
-		SessionPool:     sessionPool,
+		MaxSessions:     5,
+		BaseWorkspace:   b.TempDir(),
 		Logger:          slog.Default(),
 	})
 
@@ -1405,7 +1389,7 @@ func BenchmarkRegistrationClient_Heartbeat(b *testing.B) {
 	defer conn.Close()
 
 	lifecycleClient := protov1.NewWorkerLifecycleClient(conn)
-	capacity := sessionPool.GetCapacity()
+	capacity := client.sessionPool.GetCapacity()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

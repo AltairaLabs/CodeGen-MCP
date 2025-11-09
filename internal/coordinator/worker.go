@@ -108,13 +108,17 @@ func (r *RealWorkerClient) ExecuteTask(
 	// Generate unique task ID
 	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
 
+	// Get next sequence number for this session (for deduplication)
+	// Returns 0 if storage is not available (means no sequence tracking)
+	sequence := r.sessionManager.GetNextSequence(ctx, session.ID)
+
 	// Add timeout to prevent hanging forever if worker disconnects
 	taskCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
 	// Send task to worker over stream
 	startTime := time.Now()
-	responseChan, err := r.sendTaskToWorker(taskCtx, worker, session, taskID, toolName, workspaceID, protoArgs)
+	responseChan, err := r.sendTaskToWorker(taskCtx, worker, session, taskID, toolName, workspaceID, protoArgs, sequence)
 	if err != nil {
 		return nil, err
 	}
@@ -224,6 +228,7 @@ func (r *RealWorkerClient) sendTaskToWorker(
 	toolName string,
 	workspaceID string,
 	protoArgs map[string]string,
+	sequence uint64,
 ) (chan *protov1.TaskStreamResponse, error) {
 	worker.mu.Lock()
 	defer worker.mu.Unlock()
@@ -249,6 +254,7 @@ func (r *RealWorkerClient) sendTaskToWorker(
 					WorkspaceId: workspaceID,
 					UserId:      session.UserID,
 				},
+				Sequence: sequence, // Monotonic sequence number for deduplication
 			},
 		},
 	}

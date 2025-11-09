@@ -139,6 +139,7 @@ type TaskRequest struct {
 	Arguments     map[string]string      `protobuf:"bytes,4,rep,name=arguments,proto3" json:"arguments,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Tool arguments (JSON-encoded)
 	Context       *TaskContext           `protobuf:"bytes,5,opt,name=context,proto3" json:"context,omitempty"`
 	Constraints   *ExecutionConstraints  `protobuf:"bytes,6,opt,name=constraints,proto3" json:"constraints,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,7,opt,name=sequence,proto3" json:"sequence,omitempty"` // Monotonic sequence number for deduplication (0 = no tracking)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -213,6 +214,13 @@ func (x *TaskRequest) GetConstraints() *ExecutionConstraints {
 		return x.Constraints
 	}
 	return nil
+}
+
+func (x *TaskRequest) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 type TaskContext struct {
@@ -1058,7 +1066,7 @@ var File_api_proto_v1_task_execution_proto protoreflect.FileDescriptor
 const file_api_proto_v1_task_execution_proto_rawDesc = "" +
 	"\n" +
 	"!api/proto/v1/task_execution.proto\x12\n" +
-	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\xdd\x02\n" +
+	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\xf9\x02\n" +
 	"\vTaskRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
@@ -1066,7 +1074,8 @@ const file_api_proto_v1_task_execution_proto_rawDesc = "" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12D\n" +
 	"\targuments\x18\x04 \x03(\v2&.codegen.v1.TaskRequest.ArgumentsEntryR\targuments\x121\n" +
 	"\acontext\x18\x05 \x01(\v2\x17.codegen.v1.TaskContextR\acontext\x12B\n" +
-	"\vconstraints\x18\x06 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x1a<\n" +
+	"\vconstraints\x18\x06 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x12\x1a\n" +
+	"\bsequence\x18\a \x01(\x04R\bsequence\x1a<\n" +
 	"\x0eArgumentsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe0\x01\n" +

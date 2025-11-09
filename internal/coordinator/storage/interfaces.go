@@ -85,60 +85,10 @@ type TaskQueueStorage interface {
 	GetQueuedTasksForSession(ctx context.Context, sessionID string) ([]*QueuedTask, error)
 }
 
-// SessionStateStorage defines the interface for session metadata storage
-type SessionStateStorage interface {
-	// CreateSession creates a new session with initial state
-	// Returns error if session already exists or validation fails
-	CreateSession(ctx context.Context, session *coordinator.Session) error
-
-	// GetSession retrieves session by ID
-	// Returns nil, nil if session not found
-	GetSession(ctx context.Context, sessionID string) (*coordinator.Session, error)
-
-	// UpdateSessionState updates the state of a session
-	// Returns error if session not found
-	UpdateSessionState(ctx context.Context, sessionID string, state coordinator.SessionState, message string) error
-
-	// SetSessionMetadata sets arbitrary metadata for a session
-	// Overwrites existing metadata with same keys
-	// Returns error if session not found
-	SetSessionMetadata(ctx context.Context, sessionID string, metadata map[string]string) error
-
-	// GetSessionMetadata retrieves metadata for a session
-	// Returns empty map if session has no metadata or session not found
-	GetSessionMetadata(ctx context.Context, sessionID string) (map[string]string, error)
-
-	// GetSessionByConversationID looks up session by external conversation ID
-	// Returns nil, nil if no session found for this conversation ID
-	// Future use: map external conversation IDs to internal session IDs
-	GetSessionByConversationID(ctx context.Context, conversationID string) (*coordinator.Session, error)
-
-	// DeleteSession removes a session and its metadata
-	// Returns error if session not found (idempotent - no error if already deleted)
-	DeleteSession(ctx context.Context, sessionID string) error
-
-	// GetLastCompletedSequence gets the last successfully completed task sequence number
-	// Returns 0 if no tasks have completed yet
-	GetLastCompletedSequence(ctx context.Context, sessionID string) (uint64, error)
-
-	// SetLastCompletedSequence updates the last completed sequence number
-	// Used for deduplication - worker checks this before executing tasks
-	// Returns error if session not found
-	SetLastCompletedSequence(ctx context.Context, sessionID string, sequence uint64) error
-
-	// GetNextSequence atomically increments and returns the next sequence number for a session
-	// Used when enqueuing new tasks to assign monotonic sequence numbers
-	// Returns error if session not found
-	GetNextSequence(ctx context.Context, sessionID string) (uint64, error)
-
-	// ListSessions retrieves all active sessions
-	// Useful for debugging and cleanup operations
-	ListSessions(ctx context.Context) ([]*coordinator.Session, error)
-
-	// UpdateSessionActivity updates the LastActive timestamp for a session
-	// Used to track session activity for cleanup of stale sessions
-	UpdateSessionActivity(ctx context.Context, sessionID string) error
-}
+// NOTE: SessionStateStorage interface is defined in coordinator/session.go
+// to avoid import cycles. Storage implementations directly implement the
+// coordinator.SessionStateStorage interface, not a separate storage interface.
+// See coordinator.SessionStateStorage for the interface definition.
 
 // RegisteredWorker represents a worker registered with the coordinator
 // This is a copy of the coordinator.RegisteredWorker type for storage purposes

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage/memory"
 )
 
 const (
@@ -70,11 +71,16 @@ func main() {
 	)
 
 	// Initialize components
-	// For now, we use in-memory storage (no persistence)
+	// Storage backends are now required for session state management
+	// Using in-memory implementations - can be replaced with Redis/database backends
 	// Future: Add support for external storage backends via environment variables
 	// Example: STORAGE_BACKEND=redis STORAGE_URL=redis://localhost:6379
+	var sessionStateStorage coordinator.SessionStateStorage = memory.NewInMemorySessionStateStorage()
+
+	// WorkerRegistry uses in-memory state (TaskStream cannot be persisted)
+	// Optional: Add metadata persistence layer for recovery scenarios
 	workerRegistry := coordinator.NewWorkerRegistry()
-	sessionManager := coordinator.NewSessionManager(workerRegistry)
+	sessionManager := coordinator.NewSessionManager(sessionStateStorage, workerRegistry)
 	workerClient := coordinator.NewRealWorkerClient(workerRegistry, sessionManager, logger)
 	auditLogger := coordinator.NewAuditLogger(logger)
 

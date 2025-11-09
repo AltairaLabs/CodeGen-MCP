@@ -916,6 +916,7 @@ type TaskAssignment struct {
 	Arguments     map[string]string      `protobuf:"bytes,4,rep,name=arguments,proto3" json:"arguments,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Context       *TaskContext           `protobuf:"bytes,5,opt,name=context,proto3" json:"context,omitempty"`
 	Constraints   *ExecutionConstraints  `protobuf:"bytes,6,opt,name=constraints,proto3" json:"constraints,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,7,opt,name=sequence,proto3" json:"sequence,omitempty"` // Monotonic sequence number for deduplication (0 = no tracking)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -990,6 +991,13 @@ func (x *TaskAssignment) GetConstraints() *ExecutionConstraints {
 		return x.Constraints
 	}
 	return nil
+}
+
+func (x *TaskAssignment) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 // TaskStreamResponse is sent by worker to coordinator
@@ -1249,6 +1257,7 @@ type TaskStreamResult struct {
 	Outputs       map[string]string       `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	Artifacts     []string                `protobuf:"bytes,3,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
 	Metadata      *TaskExecutionMetadata  `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	Sequence      uint64                  `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"` // Sequence number of completed task (for deduplication tracking)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1309,6 +1318,13 @@ func (x *TaskStreamResult) GetMetadata() *TaskExecutionMetadata {
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *TaskStreamResult) GetSequence() uint64 {
+	if x != nil {
+		return x.Sequence
+	}
+	return 0
 }
 
 type TaskExecutionMetadata struct {
@@ -1700,7 +1716,7 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"\tkeepalive\x18\x03 \x01(\v2\x1b.codegen.v1.StreamKeepAliveH\x00R\tkeepalive\x12I\n" +
 	"\x0esession_create\x18\x04 \x01(\v2 .codegen.v1.SessionCreateRequestH\x00R\rsessionCreate\x12L\n" +
 	"\x0fsession_created\x18\x05 \x01(\v2!.codegen.v1.SessionCreateResponseH\x00R\x0esessionCreatedB\t\n" +
-	"\amessage\"\xe3\x02\n" +
+	"\amessage\"\xff\x02\n" +
 	"\x0eTaskAssignment\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
@@ -1708,7 +1724,8 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12G\n" +
 	"\targuments\x18\x04 \x03(\v2).codegen.v1.TaskAssignment.ArgumentsEntryR\targuments\x121\n" +
 	"\acontext\x18\x05 \x01(\v2\x17.codegen.v1.TaskContextR\acontext\x12B\n" +
-	"\vconstraints\x18\x06 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x1a<\n" +
+	"\vconstraints\x18\x06 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x12\x1a\n" +
+	"\bsequence\x18\a \x01(\x04R\bsequence\x1a<\n" +
 	"\x0eArgumentsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x91\x02\n" +
@@ -1735,12 +1752,13 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"LEVEL_INFO\x10\x02\x12\x0e\n" +
 	"\n" +
 	"LEVEL_WARN\x10\x03\x12\x0f\n" +
-	"\vLEVEL_ERROR\x10\x04\"\xa1\x03\n" +
+	"\vLEVEL_ERROR\x10\x04\"\xbd\x03\n" +
 	"\x10TaskStreamResult\x12;\n" +
 	"\x06status\x18\x01 \x01(\x0e2#.codegen.v1.TaskStreamResult.StatusR\x06status\x12C\n" +
 	"\aoutputs\x18\x02 \x03(\v2).codegen.v1.TaskStreamResult.OutputsEntryR\aoutputs\x12\x1c\n" +
 	"\tartifacts\x18\x03 \x03(\tR\tartifacts\x12=\n" +
-	"\bmetadata\x18\x04 \x01(\v2!.codegen.v1.TaskExecutionMetadataR\bmetadata\x1a:\n" +
+	"\bmetadata\x18\x04 \x01(\v2!.codegen.v1.TaskExecutionMetadataR\bmetadata\x12\x1a\n" +
+	"\bsequence\x18\x05 \x01(\x04R\bsequence\x1a:\n" +
 	"\fOutputsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"r\n" +
