@@ -99,9 +99,9 @@ test-e2e: docker-build setup-e2e-tests ## Run end-to-end MCP tests (starts Docke
 	@echo "Starting Docker services..."
 	@docker compose up -d
 	@echo "Waiting for services to be ready..."
-	@sleep 5
+	@sleep 8
 	@echo "Running test..."
-	@COORDINATOR_URL="http://localhost:8080/mcp" tests/e2e/venv/bin/python tests/e2e/test_mcp.py; \
+	@COORDINATOR_URL="http://localhost:8080/mcp/sse" tests/e2e/venv/bin/python tests/e2e/test_mcp.py; \
 	EXIT_CODE=$$?; \
 	echo ""; \
 	echo "Stopping Docker services..."; \

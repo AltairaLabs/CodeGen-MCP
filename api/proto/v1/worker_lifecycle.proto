@@ -3,6 +3,7 @@ syntax = "proto3";
 package codegen.v1;
 
 import "api/proto/v1/common.proto";
+import "api/proto/v1/task_execution.proto";
 
 option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
 
@@ -16,6 +17,10 @@ service WorkerLifecycle {
   
   // Worker gracefully deregisters before shutdown
   rpc DeregisterWorker(DeregisterRequest) returns (DeregisterResponse);
+  
+  // Worker opens a bidirectional stream for receiving task assignments from coordinator
+  // Coordinator sends TaskAssignment messages, worker sends TaskResponse messages back
+  rpc TaskStream(stream TaskStreamMessage) returns (stream TaskStreamMessage);
 }
 
 message RegisterRequest {
@@ -83,4 +88,106 @@ message DeregisterRequest {
 
 message DeregisterResponse {
   bool acknowledged = 1;
+}
+
+// TaskStreamMessage is used for bidirectional task streaming
+// Coordinator sends task assignments, worker sends responses
+message TaskStreamMessage {
+  oneof message {
+    TaskAssignment assignment = 1;   // Coordinator -> Worker: execute this task
+    TaskStreamResponse response = 2;  // Worker -> Coordinator: task update/result
+    StreamKeepAlive keepalive = 3;    // Either direction: keep connection alive
+    SessionCreateRequest session_create = 4;  // Coordinator -> Worker: create session
+    SessionCreateResponse session_created = 5; // Worker -> Coordinator: session created
+  }
+}
+
+// TaskAssignment is sent by coordinator to worker
+// Reuses TaskContext and ExecutionConstraints from task_execution.proto
+message TaskAssignment {
+  string task_id = 1;
+  string session_id = 2;
+  string tool_name = 3;
+  map<string, string> arguments = 4;
+  TaskContext context = 5;
+  ExecutionConstraints constraints = 6;
+}
+
+// TaskStreamResponse is sent by worker to coordinator
+message TaskStreamResponse {
+  string task_id = 1;
+  oneof payload {
+    TaskProgressUpdate progress = 2;
+    TaskLogEntry log = 3;
+    TaskStreamResult result = 4;
+    TaskStreamError error = 5;
+  }
+}
+
+message TaskProgressUpdate {
+  int32 percent_complete = 1;
+  string stage = 2;
+  string message = 3;
+}
+
+message TaskLogEntry {
+  enum Level {
+    LEVEL_UNSPECIFIED = 0;
+    LEVEL_DEBUG = 1;
+    LEVEL_INFO = 2;
+    LEVEL_WARN = 3;
+    LEVEL_ERROR = 4;
+  }
+  Level level = 1;
+  string message = 2;
+  int64 timestamp_ms = 3;
+  string source = 4;
+}
+
+message TaskStreamResult {
+  enum Status {
+    STATUS_UNSPECIFIED = 0;
+    STATUS_SUCCESS = 1;
+    STATUS_FAILURE = 2;
+    STATUS_TIMEOUT = 3;
+    STATUS_CANCELLED = 4;
+  }
+  Status status = 1;
+  map<string, string> outputs = 2;
+  repeated string artifacts = 3;
+  TaskExecutionMetadata metadata = 4;
+}
+
+message TaskExecutionMetadata {
+  int64 start_time_ms = 1;
+  int64 end_time_ms = 2;
+  int64 duration_ms = 3;
+  ResourceUsage peak_usage = 4;
+  int32 exit_code = 5;
+}
+
+message TaskStreamError {
+  string code = 1;
+  string message = 2;
+  string details = 3;
+  bool retriable = 4;
+}
+
+message StreamKeepAlive {
+  int64 timestamp_ms = 1;
+}
+
+// SessionCreateRequest is sent by coordinator to worker to create a new session
+message SessionCreateRequest {
+  string session_id = 1;        // Session ID to create
+  string workspace_id = 2;      // Workspace identifier
+  string user_id = 3;           // User/tenant identifier
+  map<string, string> env_vars = 4;  // Environment variables for session
+}
+
+// SessionCreateResponse is sent by worker to coordinator after session creation
+message SessionCreateResponse {
+  string session_id = 1;        // Session ID that was created
+  bool success = 2;             // Whether creation succeeded
+  string error = 3;             // Error message if failed
 }

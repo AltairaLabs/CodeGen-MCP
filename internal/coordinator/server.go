@@ -24,6 +24,14 @@ const (
 	errSessionError = "session error: %v"
 )
 
+// sessionIDKey is the context key for session ID
+type sessionIDKey struct{}
+
+// contextWithSessionID adds the session ID to the context
+func contextWithSessionID(ctx context.Context, sessionID string) context.Context {
+	return context.WithValue(ctx, sessionIDKey{}, sessionID)
+}
+
 // MCPServer wraps the mcp-go server with our business logic
 type MCPServer struct {
 	server         *server.MCPServer
@@ -151,8 +159,9 @@ func (ms *MCPServer) handleEcho(ctx context.Context, request mcp.CallToolRequest
 		WorkspaceID: session.WorkspaceID,
 	})
 
-	// Execute via worker
-	result, err := ms.workerClient.ExecuteTask(ctx, session.WorkspaceID, toolEcho, TaskArgs{
+	// Execute via worker (add session ID to context)
+	ctxWithSession := contextWithSessionID(ctx, session.ID)
+	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolEcho, TaskArgs{
 		"message": message,
 	})
 
@@ -200,7 +209,8 @@ func (ms *MCPServer) handleFsRead(ctx context.Context, request mcp.CallToolReque
 		WorkspaceID: session.WorkspaceID,
 	})
 
-	result, err := ms.workerClient.ExecuteTask(ctx, session.WorkspaceID, toolFsRead, TaskArgs{"path": path})
+	ctxWithSession := contextWithSessionID(ctx, session.ID)
+	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolFsRead, TaskArgs{"path": path})
 
 	if err != nil {
 		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
@@ -251,7 +261,9 @@ func (ms *MCPServer) handleFsWrite(ctx context.Context, request mcp.CallToolRequ
 		WorkspaceID: session.WorkspaceID,
 	})
 
-	result, err := ms.workerClient.ExecuteTask(ctx, session.WorkspaceID, toolFsWrite, TaskArgs{
+	// Add session ID to context for worker execution
+	ctxWithSession := contextWithSessionID(ctx, session.ID)
+	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolFsWrite, TaskArgs{
 		"path":     path,
 		"contents": contents,
 	})
@@ -290,10 +302,15 @@ func (ms *MCPServer) validateWorkspacePath(path string) error {
 	return nil
 }
 
-// getSessionID extracts session ID from context (placeholder implementation)
+// getSessionID extracts session ID from context
 func (ms *MCPServer) getSessionID(ctx context.Context) string {
-	// In a real implementation, this would extract from context
-	// For now, return a default session ID
+	// Extract session ID from mcp-go's ClientSession in context
+	// The SSE/HTTP transport automatically injects this
+	clientSession := server.ClientSessionFromContext(ctx)
+	if clientSession != nil {
+		return clientSession.SessionID()
+	}
+	// Fallback for stdio transport or testing
 	sessionID, ok := ctx.Value("session_id").(string)
 	if !ok {
 		return "default-session"
@@ -304,19 +321,40 @@ func (ms *MCPServer) getSessionID(ctx context.Context) string {
 // getOrCreateSession retrieves an existing session or creates a new one with worker assignment
 func (ms *MCPServer) getOrCreateSession(ctx context.Context) (*Session, error) {
 	sessionID := ms.getSessionID(ctx)
-	session, ok := ms.sessionManager.GetSession(sessionID)
-	if !ok {
-		// Create new session with worker assignment
-		session = ms.sessionManager.CreateSession(ctx, sessionID, "default-user", "default-workspace")
-		if session == nil {
-			return nil, fmt.Errorf("failed to create session")
-		}
 
-		// Verify worker was assigned
-		if session.WorkerID == "" {
-			return nil, fmt.Errorf("no workers available")
-		}
+	// Check if session exists
+	session, ok := ms.sessionManager.GetSession(sessionID)
+	if ok {
+		slog.Debug("Using existing session",
+			"session_id", sessionID,
+			"worker_id", session.WorkerID,
+			"workspace_id", session.WorkspaceID)
+		return session, nil
 	}
+
+	// Create new session with worker assignment
+	slog.Info("Creating new session",
+		"session_id", sessionID,
+		"user_id", "default-user",
+		"workspace_id", "default-workspace")
+
+	session = ms.sessionManager.CreateSession(ctx, sessionID, "default-user", "default-workspace")
+	if session == nil {
+		slog.Error("Failed to create session", "session_id", sessionID)
+		return nil, fmt.Errorf("failed to create session")
+	}
+
+	// Verify worker was assigned
+	if session.WorkerID == "" {
+		slog.Error("No workers available for session", "session_id", sessionID)
+		return nil, fmt.Errorf("no workers available")
+	}
+
+	slog.Info("Session created successfully",
+		"session_id", sessionID,
+		"worker_id", session.WorkerID,
+		"workspace_id", session.WorkspaceID)
+
 	return session, nil
 }
 
@@ -378,7 +416,8 @@ func (ms *MCPServer) handleFsList(ctx context.Context, request mcp.CallToolReque
 	})
 
 	args := TaskArgs{"path": path}
-	result, err := ms.workerClient.ExecuteTask(ctx, session.WorkspaceID, toolFsList, args)
+	ctxWithSession := contextWithSessionID(ctx, session.ID)
+	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolFsList, args)
 
 	if err != nil {
 		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
@@ -438,7 +477,8 @@ func (ms *MCPServer) handleRunPython(ctx context.Context, request mcp.CallToolRe
 		WorkspaceID: session.WorkspaceID,
 	})
 
-	result, err := ms.workerClient.ExecuteTask(ctx, session.WorkspaceID, toolRunPython, args)
+	ctxWithSession := contextWithSessionID(ctx, session.ID)
+	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolRunPython, args)
 
 	if err != nil {
 		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
@@ -491,7 +531,8 @@ func (ms *MCPServer) handlePkgInstall(ctx context.Context, request mcp.CallToolR
 		WorkspaceID: session.WorkspaceID,
 	})
 
-	result, err := ms.workerClient.ExecuteTask(ctx, session.WorkspaceID, toolPkgInstall, TaskArgs{
+	ctxWithSession := contextWithSessionID(ctx, session.ID)
+	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolPkgInstall, TaskArgs{
 		"packages": packages,
 	})
 

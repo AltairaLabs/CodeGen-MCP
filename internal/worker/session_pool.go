@@ -83,6 +83,65 @@ func NewSessionPoolWithFactory(
 	}
 }
 
+// CreateSessionWithID creates a new session with a specific session ID (used for coordinator-assigned sessions)
+func (sp *SessionPool) CreateSessionWithID(ctx context.Context, sessionID, workspaceID, userID string, envVars map[string]string) error {
+	sp.mu.Lock()
+	defer sp.mu.Unlock()
+
+	// Check capacity
+	//nolint:gosec // G115: Session count is bounded by maxSessions config, no overflow risk
+	if int32(len(sp.sessions)) >= sp.maxSessions {
+		return fmt.Errorf("session pool at capacity: %d/%d", len(sp.sessions), sp.maxSessions)
+	}
+
+	// Check if session already exists
+	if _, exists := sp.sessions[sessionID]; exists {
+		return fmt.Errorf("session already exists: %s", sessionID)
+	}
+
+	// Create isolated workspace directory
+	workspacePath := filepath.Join(sp.baseWorkspace, sessionID)
+	//nolint:lll // NOSONAR comment explains security considerations
+	if err := os.MkdirAll(workspacePath, defaultWorkspaceDirPerm); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
+		return fmt.Errorf("failed to create workspace: %w", err)
+	}
+
+	// Create session config
+	config := &protov1.SessionConfig{
+		EnvVars: envVars,
+	}
+
+	// Initialize session
+	session := &WorkerSession{
+		SessionID:        sessionID,
+		WorkspaceID:      workspaceID,
+		UserID:           userID,
+		WorkspacePath:    workspacePath,
+		State:            protov1.SessionState_SESSION_STATE_INITIALIZING,
+		Config:           config,
+		CreatedAt:        time.Now(),
+		LastActivity:     time.Now(),
+		ActiveTasks:      0,
+		ResourceUsage:    &protov1.ResourceUsage{},
+		InstalledPkgs:    make([]string, 0),
+		RecentTasks:      make([]string, 0),
+		LastCheckpointID: "",
+		ArtifactIDs:      make([]string, 0),
+		maxRecentTasks:   defaultMaxRecentTasks,
+	}
+
+	// Apply session configuration
+	if err := sp.initializeSession(ctx, session); err != nil {
+		_ = os.RemoveAll(workspacePath) // Best effort cleanup on error
+		return fmt.Errorf("failed to initialize session: %w", err)
+	}
+
+	session.State = protov1.SessionState_SESSION_STATE_READY
+	sp.sessions[sessionID] = session
+
+	return nil
+}
+
 // CreateSession creates a new isolated session
 //
 //nolint:lll // Protobuf types create inherently long function signatures

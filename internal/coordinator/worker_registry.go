@@ -9,44 +9,79 @@ import (
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
+// WorkerRegistryStorage defines the storage backend interface for worker registry
+// Note: This is a simplified interface compared to storage.WorkerRegistryStorage
+// because the coordinator's RegisteredWorker has runtime fields like TaskStream
+// that cannot be persisted. This interface focuses on metadata persistence.
+type WorkerRegistryStorage interface {
+	// RegisterWorker stores basic worker metadata
+	RegisterWorker(ctx context.Context, workerID string, metadata map[string]interface{}) error
+	// GetWorker retrieves worker metadata
+	GetWorker(ctx context.Context, workerID string) (map[string]interface{}, error)
+	// GetAllWorkers retrieves all worker metadata
+	GetAllWorkers(ctx context.Context) (map[string]map[string]interface{}, error)
+	// UnregisterWorker removes worker metadata
+	UnregisterWorker(ctx context.Context, workerID string) error
+	// UpdateWorkerHeartbeat updates last heartbeat timestamp
+	UpdateWorkerHeartbeat(ctx context.Context, workerID string, lastHeartbeat time.Time) error
+}
+
 // WorkerRegistry manages registered workers and their capacity
 type WorkerRegistry struct {
 	mu      sync.RWMutex
 	workers map[string]*RegisteredWorker
+	storage WorkerRegistryStorage // Optional storage backend
 }
 
 // RegisteredWorker represents a worker registered with the coordinator
 type RegisteredWorker struct {
-	WorkerID          string
-	SessionID         string // Worker's registration session ID
-	Client            WorkerServiceClient
-	Capabilities      *protov1.WorkerCapabilities
-	Limits            *protov1.ResourceLimits
-	Status            *protov1.WorkerStatus
-	Capacity          *protov1.SessionCapacity
-	LastHeartbeat     time.Time
-	RegisteredAt      time.Time
-	HeartbeatInterval time.Duration
-	mu                sync.RWMutex
-}
-
-// WorkerServiceClient combines all worker gRPC service clients
-type WorkerServiceClient struct {
-	SessionMgmt protov1.SessionManagementClient
-	TaskExec    protov1.TaskExecutionClient
-	Artifacts   protov1.ArtifactServiceClient
-	// conn is reserved for future connection lifecycle management
+	WorkerID              string
+	SessionID             string                                         // Worker's registration session ID
+	TaskStream            protov1.WorkerLifecycle_TaskStreamServer       // Bidirectional stream for tasks
+	PendingTasks          map[string]chan *protov1.TaskStreamResponse    // Channels waiting for task responses
+	PendingSessionCreates map[string]chan *protov1.SessionCreateResponse // Channels waiting for session create responses
+	Capabilities          *protov1.WorkerCapabilities
+	Limits                *protov1.ResourceLimits
+	Status                *protov1.WorkerStatus
+	Capacity              *protov1.SessionCapacity
+	LastHeartbeat         time.Time
+	RegisteredAt          time.Time
+	HeartbeatInterval     time.Duration
+	mu                    sync.RWMutex
 }
 
 // NewWorkerRegistry creates a new worker registry
 func NewWorkerRegistry() *WorkerRegistry {
 	return &WorkerRegistry{
 		workers: make(map[string]*RegisteredWorker),
+		storage: nil,
+	}
+}
+
+// NewWorkerRegistryWithStorage creates a worker registry with storage backend
+func NewWorkerRegistryWithStorage(storage WorkerRegistryStorage) *WorkerRegistry {
+	return &WorkerRegistry{
+		workers: make(map[string]*RegisteredWorker),
+		storage: storage,
 	}
 }
 
 // RegisterWorker adds a new worker to the registry
 func (wr *WorkerRegistry) RegisterWorker(workerID string, worker *RegisteredWorker) error {
+	if wr.storage != nil {
+		// Store metadata in storage backend
+		metadata := map[string]interface{}{
+			"worker_id":          workerID,
+			"session_id":         worker.SessionID,
+			"registered_at":      worker.RegisteredAt,
+			"last_heartbeat":     worker.LastHeartbeat,
+			"heartbeat_interval": worker.HeartbeatInterval,
+		}
+		if err := wr.storage.RegisterWorker(context.Background(), workerID, metadata); err != nil {
+			return fmt.Errorf("failed to store worker metadata: %w", err)
+		}
+	}
+
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
 
@@ -60,6 +95,8 @@ func (wr *WorkerRegistry) RegisterWorker(workerID string, worker *RegisteredWork
 
 // GetWorker retrieves a worker by ID
 func (wr *WorkerRegistry) GetWorker(workerID string) *RegisteredWorker {
+	// Always return from in-memory map (contains runtime state)
+	// Storage is only for persistence/recovery scenarios
 	wr.mu.RLock()
 	defer wr.mu.RUnlock()
 
@@ -79,11 +116,21 @@ func (wr *WorkerRegistry) UpdateHeartbeat(workerID string, status *protov1.Worke
 	}
 
 	worker.mu.Lock()
-	defer worker.mu.Unlock()
-
 	worker.Status = status
 	worker.Capacity = capacity
-	worker.LastHeartbeat = time.Now()
+	now := time.Now()
+	worker.LastHeartbeat = now
+	worker.mu.Unlock()
+
+	// Update storage backend if available
+	if wr.storage != nil {
+		if err := wr.storage.UpdateWorkerHeartbeat(context.Background(), workerID, now); err != nil {
+			// Storage is for persistence/recovery - failure is non-critical
+			// In-memory update succeeded, that's what matters for runtime
+			// TODO: Add proper logging when logger is available in WorkerRegistry
+			_ = err
+		}
+	}
 
 	return nil
 }
@@ -134,6 +181,16 @@ func (wr *WorkerRegistry) FindWorkerWithCapacity(ctx context.Context, config *pr
 
 // DeregisterWorker removes a worker from the registry
 func (wr *WorkerRegistry) DeregisterWorker(workerID string) error {
+	if wr.storage != nil {
+		// Remove from storage backend
+		if err := wr.storage.UnregisterWorker(context.Background(), workerID); err != nil {
+			// Storage is for persistence/recovery - failure is non-critical
+			// We'll still remove from memory
+			// TODO: Add proper logging when logger is available in WorkerRegistry
+			_ = err
+		}
+	}
+
 	wr.mu.Lock()
 	defer wr.mu.Unlock()
 
@@ -189,10 +246,28 @@ func (wr *WorkerRegistry) CleanupStaleWorkers(timeout time.Duration) int {
 		worker.mu.RUnlock()
 
 		if now.Sub(lastHeartbeat) > timeout {
+			// Remove from storage backend if available
+			if wr.storage != nil {
+				_ = wr.storage.UnregisterWorker(context.Background(), workerID)
+			}
 			delete(wr.workers, workerID)
 			removed++
 		}
 	}
 
 	return removed
+}
+
+// GetAllWorkers returns a map of all registered workers
+// This method is for external access to avoid direct field access
+func (wr *WorkerRegistry) GetAllWorkers() map[string]*RegisteredWorker {
+	wr.mu.RLock()
+	defer wr.mu.RUnlock()
+
+	// Create a copy to avoid external modifications
+	result := make(map[string]*RegisteredWorker, len(wr.workers))
+	for id, worker := range wr.workers {
+		result[id] = worker
+	}
+	return result
 }

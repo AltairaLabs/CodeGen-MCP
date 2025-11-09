@@ -6,22 +6,17 @@ import (
 	"fmt"
 	"log"
 	"log/slog"
-	"net"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"google.golang.org/grpc"
-
-	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"github.com/AltairaLabs/codegen-mcp/internal/worker"
 )
 
 const (
 	defaultMaxSessions     = 5
 	defaultWorkspacePerms  = 0755
-	defaultGRPCPort        = "50051"
 	defaultWorkerID        = "worker-1"
 	defaultBaseWorkspace   = "/tmp/codegen-workspaces"
 	defaultCoordinatorAddr = "localhost:50050"
@@ -44,7 +39,6 @@ func main() {
 
 	// Read configuration from environment
 	workerID := getEnv("WORKER_ID", defaultWorkerID)
-	grpcPort := getEnv("GRPC_PORT", defaultGRPCPort)
 	maxSessions := getEnvInt("MAX_SESSIONS", defaultMaxSessions)
 	baseWorkspace := getEnv("BASE_WORKSPACE", defaultBaseWorkspace)
 	coordinatorAddr := getEnv("COORDINATOR_ADDR", defaultCoordinatorAddr)
@@ -56,7 +50,6 @@ func main() {
 
 	logger.Info("Worker configuration",
 		"worker_id", workerID,
-		"grpc_port", grpcPort,
 		"max_sessions", maxSessions,
 		"base_workspace", baseWorkspace,
 		"coordinator_addr", coordinatorAddr,
@@ -72,21 +65,15 @@ func main() {
 	// #nosec G115 - maxSessions is bounded by config validation (typically < 1000)
 	workerServer := worker.NewWorkerServer(workerID, int32(maxSessions), baseWorkspace)
 
-	// Construct worker's gRPC address
-	// Use WORKER_HOSTNAME env var if set (for Docker), otherwise localhost
-	hostname := os.Getenv("WORKER_HOSTNAME")
-	if hostname == "" {
-		hostname = "localhost"
-	}
-	grpcAddress := fmt.Sprintf("%s:%s", hostname, grpcPort)
-
 	// Create registration client
+	// Note: GRPCAddress is sent to coordinator but worker doesn't listen (legacy field)
 	regClient := worker.NewRegistrationClient(&worker.RegistrationConfig{
 		WorkerID:        workerID,
-		GRPCAddress:     grpcAddress,
+		GRPCAddress:     "", // Worker doesn't listen, all communication via task stream
 		CoordinatorAddr: coordinatorAddr,
 		Version:         workerVersion,
 		SessionPool:     workerServer.GetSessionPool(),
+		TaskExecutor:    workerServer.GetTaskExecutor(),
 		Logger:          logger,
 	})
 
@@ -94,49 +81,26 @@ func main() {
 	ctx := context.Background()
 	if err := regClient.Start(ctx); err != nil {
 		logger.Error("Failed to register with coordinator", "error", err)
-		// Continue anyway - we can still serve if coordinator is unavailable
-		logger.Warn("Worker starting without coordinator registration")
+		log.Fatalf("Cannot start worker without coordinator connection")
 	}
 
-	// Create gRPC server
-	grpcServer := grpc.NewServer()
-
-	// Register services
-	protov1.RegisterSessionManagementServer(grpcServer, workerServer)
-	protov1.RegisterTaskExecutionServer(grpcServer, workerServer)
-	protov1.RegisterArtifactServiceServer(grpcServer, workerServer)
-
-	// Start listening
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%s", grpcPort)) //nolint:noctx // Standard gRPC server pattern
-	if err != nil {
-		log.Fatalf("Failed to listen: %v", err)
-	}
+	logger.Info("Worker started successfully, connected to coordinator")
 
 	// Handle graceful shutdown
 	shutdownCh := make(chan os.Signal, 1)
 	signal.Notify(shutdownCh, os.Interrupt, syscall.SIGTERM)
 
-	go func() {
-		<-shutdownCh
-		logger.Info("Received shutdown signal, starting graceful shutdown")
+	// Wait for shutdown signal
+	<-shutdownCh
+	logger.Info("Received shutdown signal, starting graceful shutdown")
 
-		// Deregister from coordinator
-		const shutdownTimeout = 10 * time.Second
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
+	// Deregister from coordinator
+	const shutdownTimeout = 10 * time.Second
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
 
-		if err := regClient.Stop(shutdownCtx); err != nil {
-			logger.Warn("Error during deregistration", "error", err)
-		}
-
-		// Stop gRPC server
-		logger.Info("Stopping gRPC server")
-		grpcServer.GracefulStop()
-	}()
-
-	logger.Info("Worker listening for gRPC connections", "port", grpcPort)
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("Failed to serve: %v", err)
+	if err := regClient.Stop(shutdownCtx); err != nil {
+		logger.Warn("Error during deregistration", "error", err)
 	}
 
 	logger.Info("Worker shutdown complete")

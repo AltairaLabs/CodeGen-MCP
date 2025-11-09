@@ -30,14 +30,13 @@ async def run_e2e_test():
     """Run the complete end-to-end test workflow"""
     
     # Get coordinator URL from environment or use default
-    # The sse_client will append '/sse' automatically
-    coordinator_url = os.getenv("COORDINATOR_URL", "http://localhost:8080/mcp")
+    # The sse_client expects the full SSE endpoint URL, not a base URL
+    coordinator_url = os.getenv("COORDINATOR_URL", "http://localhost:8080/mcp/sse")
     
     print("=" * 70)
     print("🚀 CodeGen-MCP End-to-End Test (HTTP/SSE Transport)")
     print("=" * 70)
-    print(f"📡 Coordinator Base URL: {coordinator_url}")
-    print(f"📡 SSE Endpoint: {coordinator_url}/sse")
+    print(f"📡 SSE Endpoint: {coordinator_url}")
     
     # Phase 1: Connect
     print("\n🔌 Phase 1: Connecting to MCP server...")

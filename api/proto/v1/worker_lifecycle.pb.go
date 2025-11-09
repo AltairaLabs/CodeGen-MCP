@@ -76,6 +76,116 @@ func (WorkerStatus_State) EnumDescriptor() ([]byte, []int) {
 	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{5, 0}
 }
 
+type TaskLogEntry_Level int32
+
+const (
+	TaskLogEntry_LEVEL_UNSPECIFIED TaskLogEntry_Level = 0
+	TaskLogEntry_LEVEL_DEBUG       TaskLogEntry_Level = 1
+	TaskLogEntry_LEVEL_INFO        TaskLogEntry_Level = 2
+	TaskLogEntry_LEVEL_WARN        TaskLogEntry_Level = 3
+	TaskLogEntry_LEVEL_ERROR       TaskLogEntry_Level = 4
+)
+
+// Enum value maps for TaskLogEntry_Level.
+var (
+	TaskLogEntry_Level_name = map[int32]string{
+		0: "LEVEL_UNSPECIFIED",
+		1: "LEVEL_DEBUG",
+		2: "LEVEL_INFO",
+		3: "LEVEL_WARN",
+		4: "LEVEL_ERROR",
+	}
+	TaskLogEntry_Level_value = map[string]int32{
+		"LEVEL_UNSPECIFIED": 0,
+		"LEVEL_DEBUG":       1,
+		"LEVEL_INFO":        2,
+		"LEVEL_WARN":        3,
+		"LEVEL_ERROR":       4,
+	}
+)
+
+func (x TaskLogEntry_Level) Enum() *TaskLogEntry_Level {
+	p := new(TaskLogEntry_Level)
+	*p = x
+	return p
+}
+
+func (x TaskLogEntry_Level) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TaskLogEntry_Level) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_proto_v1_worker_lifecycle_proto_enumTypes[1].Descriptor()
+}
+
+func (TaskLogEntry_Level) Type() protoreflect.EnumType {
+	return &file_api_proto_v1_worker_lifecycle_proto_enumTypes[1]
+}
+
+func (x TaskLogEntry_Level) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TaskLogEntry_Level.Descriptor instead.
+func (TaskLogEntry_Level) EnumDescriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{13, 0}
+}
+
+type TaskStreamResult_Status int32
+
+const (
+	TaskStreamResult_STATUS_UNSPECIFIED TaskStreamResult_Status = 0
+	TaskStreamResult_STATUS_SUCCESS     TaskStreamResult_Status = 1
+	TaskStreamResult_STATUS_FAILURE     TaskStreamResult_Status = 2
+	TaskStreamResult_STATUS_TIMEOUT     TaskStreamResult_Status = 3
+	TaskStreamResult_STATUS_CANCELLED   TaskStreamResult_Status = 4
+)
+
+// Enum value maps for TaskStreamResult_Status.
+var (
+	TaskStreamResult_Status_name = map[int32]string{
+		0: "STATUS_UNSPECIFIED",
+		1: "STATUS_SUCCESS",
+		2: "STATUS_FAILURE",
+		3: "STATUS_TIMEOUT",
+		4: "STATUS_CANCELLED",
+	}
+	TaskStreamResult_Status_value = map[string]int32{
+		"STATUS_UNSPECIFIED": 0,
+		"STATUS_SUCCESS":     1,
+		"STATUS_FAILURE":     2,
+		"STATUS_TIMEOUT":     3,
+		"STATUS_CANCELLED":   4,
+	}
+)
+
+func (x TaskStreamResult_Status) Enum() *TaskStreamResult_Status {
+	p := new(TaskStreamResult_Status)
+	*p = x
+	return p
+}
+
+func (x TaskStreamResult_Status) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TaskStreamResult_Status) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_proto_v1_worker_lifecycle_proto_enumTypes[2].Descriptor()
+}
+
+func (TaskStreamResult_Status) Type() protoreflect.EnumType {
+	return &file_api_proto_v1_worker_lifecycle_proto_enumTypes[2]
+}
+
+func (x TaskStreamResult_Status) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TaskStreamResult_Status.Descriptor instead.
+func (TaskStreamResult_Status) EnumDescriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{14, 0}
+}
+
 type RegisterRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	WorkerId      string                 `protobuf:"bytes,1,opt,name=worker_id,json=workerId,proto3" json:"worker_id,omitempty"`    // Unique worker identifier (from env)
@@ -664,12 +774,867 @@ func (x *DeregisterResponse) GetAcknowledged() bool {
 	return false
 }
 
+// TaskStreamMessage is used for bidirectional task streaming
+// Coordinator sends task assignments, worker sends responses
+type TaskStreamMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Message:
+	//
+	//	*TaskStreamMessage_Assignment
+	//	*TaskStreamMessage_Response
+	//	*TaskStreamMessage_Keepalive
+	//	*TaskStreamMessage_SessionCreate
+	//	*TaskStreamMessage_SessionCreated
+	Message       isTaskStreamMessage_Message `protobuf_oneof:"message"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskStreamMessage) Reset() {
+	*x = TaskStreamMessage{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskStreamMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskStreamMessage) ProtoMessage() {}
+
+func (x *TaskStreamMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskStreamMessage.ProtoReflect.Descriptor instead.
+func (*TaskStreamMessage) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *TaskStreamMessage) GetMessage() isTaskStreamMessage_Message {
+	if x != nil {
+		return x.Message
+	}
+	return nil
+}
+
+func (x *TaskStreamMessage) GetAssignment() *TaskAssignment {
+	if x != nil {
+		if x, ok := x.Message.(*TaskStreamMessage_Assignment); ok {
+			return x.Assignment
+		}
+	}
+	return nil
+}
+
+func (x *TaskStreamMessage) GetResponse() *TaskStreamResponse {
+	if x != nil {
+		if x, ok := x.Message.(*TaskStreamMessage_Response); ok {
+			return x.Response
+		}
+	}
+	return nil
+}
+
+func (x *TaskStreamMessage) GetKeepalive() *StreamKeepAlive {
+	if x != nil {
+		if x, ok := x.Message.(*TaskStreamMessage_Keepalive); ok {
+			return x.Keepalive
+		}
+	}
+	return nil
+}
+
+func (x *TaskStreamMessage) GetSessionCreate() *SessionCreateRequest {
+	if x != nil {
+		if x, ok := x.Message.(*TaskStreamMessage_SessionCreate); ok {
+			return x.SessionCreate
+		}
+	}
+	return nil
+}
+
+func (x *TaskStreamMessage) GetSessionCreated() *SessionCreateResponse {
+	if x != nil {
+		if x, ok := x.Message.(*TaskStreamMessage_SessionCreated); ok {
+			return x.SessionCreated
+		}
+	}
+	return nil
+}
+
+type isTaskStreamMessage_Message interface {
+	isTaskStreamMessage_Message()
+}
+
+type TaskStreamMessage_Assignment struct {
+	Assignment *TaskAssignment `protobuf:"bytes,1,opt,name=assignment,proto3,oneof"` // Coordinator -> Worker: execute this task
+}
+
+type TaskStreamMessage_Response struct {
+	Response *TaskStreamResponse `protobuf:"bytes,2,opt,name=response,proto3,oneof"` // Worker -> Coordinator: task update/result
+}
+
+type TaskStreamMessage_Keepalive struct {
+	Keepalive *StreamKeepAlive `protobuf:"bytes,3,opt,name=keepalive,proto3,oneof"` // Either direction: keep connection alive
+}
+
+type TaskStreamMessage_SessionCreate struct {
+	SessionCreate *SessionCreateRequest `protobuf:"bytes,4,opt,name=session_create,json=sessionCreate,proto3,oneof"` // Coordinator -> Worker: create session
+}
+
+type TaskStreamMessage_SessionCreated struct {
+	SessionCreated *SessionCreateResponse `protobuf:"bytes,5,opt,name=session_created,json=sessionCreated,proto3,oneof"` // Worker -> Coordinator: session created
+}
+
+func (*TaskStreamMessage_Assignment) isTaskStreamMessage_Message() {}
+
+func (*TaskStreamMessage_Response) isTaskStreamMessage_Message() {}
+
+func (*TaskStreamMessage_Keepalive) isTaskStreamMessage_Message() {}
+
+func (*TaskStreamMessage_SessionCreate) isTaskStreamMessage_Message() {}
+
+func (*TaskStreamMessage_SessionCreated) isTaskStreamMessage_Message() {}
+
+// TaskAssignment is sent by coordinator to worker
+// Reuses TaskContext and ExecutionConstraints from task_execution.proto
+type TaskAssignment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
+	Arguments     map[string]string      `protobuf:"bytes,4,rep,name=arguments,proto3" json:"arguments,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Context       *TaskContext           `protobuf:"bytes,5,opt,name=context,proto3" json:"context,omitempty"`
+	Constraints   *ExecutionConstraints  `protobuf:"bytes,6,opt,name=constraints,proto3" json:"constraints,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskAssignment) Reset() {
+	*x = TaskAssignment{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskAssignment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskAssignment) ProtoMessage() {}
+
+func (x *TaskAssignment) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskAssignment.ProtoReflect.Descriptor instead.
+func (*TaskAssignment) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *TaskAssignment) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *TaskAssignment) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *TaskAssignment) GetToolName() string {
+	if x != nil {
+		return x.ToolName
+	}
+	return ""
+}
+
+func (x *TaskAssignment) GetArguments() map[string]string {
+	if x != nil {
+		return x.Arguments
+	}
+	return nil
+}
+
+func (x *TaskAssignment) GetContext() *TaskContext {
+	if x != nil {
+		return x.Context
+	}
+	return nil
+}
+
+func (x *TaskAssignment) GetConstraints() *ExecutionConstraints {
+	if x != nil {
+		return x.Constraints
+	}
+	return nil
+}
+
+// TaskStreamResponse is sent by worker to coordinator
+type TaskStreamResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	TaskId string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	// Types that are valid to be assigned to Payload:
+	//
+	//	*TaskStreamResponse_Progress
+	//	*TaskStreamResponse_Log
+	//	*TaskStreamResponse_Result
+	//	*TaskStreamResponse_Error
+	Payload       isTaskStreamResponse_Payload `protobuf_oneof:"payload"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskStreamResponse) Reset() {
+	*x = TaskStreamResponse{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskStreamResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskStreamResponse) ProtoMessage() {}
+
+func (x *TaskStreamResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskStreamResponse.ProtoReflect.Descriptor instead.
+func (*TaskStreamResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *TaskStreamResponse) GetTaskId() string {
+	if x != nil {
+		return x.TaskId
+	}
+	return ""
+}
+
+func (x *TaskStreamResponse) GetPayload() isTaskStreamResponse_Payload {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *TaskStreamResponse) GetProgress() *TaskProgressUpdate {
+	if x != nil {
+		if x, ok := x.Payload.(*TaskStreamResponse_Progress); ok {
+			return x.Progress
+		}
+	}
+	return nil
+}
+
+func (x *TaskStreamResponse) GetLog() *TaskLogEntry {
+	if x != nil {
+		if x, ok := x.Payload.(*TaskStreamResponse_Log); ok {
+			return x.Log
+		}
+	}
+	return nil
+}
+
+func (x *TaskStreamResponse) GetResult() *TaskStreamResult {
+	if x != nil {
+		if x, ok := x.Payload.(*TaskStreamResponse_Result); ok {
+			return x.Result
+		}
+	}
+	return nil
+}
+
+func (x *TaskStreamResponse) GetError() *TaskStreamError {
+	if x != nil {
+		if x, ok := x.Payload.(*TaskStreamResponse_Error); ok {
+			return x.Error
+		}
+	}
+	return nil
+}
+
+type isTaskStreamResponse_Payload interface {
+	isTaskStreamResponse_Payload()
+}
+
+type TaskStreamResponse_Progress struct {
+	Progress *TaskProgressUpdate `protobuf:"bytes,2,opt,name=progress,proto3,oneof"`
+}
+
+type TaskStreamResponse_Log struct {
+	Log *TaskLogEntry `protobuf:"bytes,3,opt,name=log,proto3,oneof"`
+}
+
+type TaskStreamResponse_Result struct {
+	Result *TaskStreamResult `protobuf:"bytes,4,opt,name=result,proto3,oneof"`
+}
+
+type TaskStreamResponse_Error struct {
+	Error *TaskStreamError `protobuf:"bytes,5,opt,name=error,proto3,oneof"`
+}
+
+func (*TaskStreamResponse_Progress) isTaskStreamResponse_Payload() {}
+
+func (*TaskStreamResponse_Log) isTaskStreamResponse_Payload() {}
+
+func (*TaskStreamResponse_Result) isTaskStreamResponse_Payload() {}
+
+func (*TaskStreamResponse_Error) isTaskStreamResponse_Payload() {}
+
+type TaskProgressUpdate struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	PercentComplete int32                  `protobuf:"varint,1,opt,name=percent_complete,json=percentComplete,proto3" json:"percent_complete,omitempty"`
+	Stage           string                 `protobuf:"bytes,2,opt,name=stage,proto3" json:"stage,omitempty"`
+	Message         string                 `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TaskProgressUpdate) Reset() {
+	*x = TaskProgressUpdate{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskProgressUpdate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskProgressUpdate) ProtoMessage() {}
+
+func (x *TaskProgressUpdate) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskProgressUpdate.ProtoReflect.Descriptor instead.
+func (*TaskProgressUpdate) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *TaskProgressUpdate) GetPercentComplete() int32 {
+	if x != nil {
+		return x.PercentComplete
+	}
+	return 0
+}
+
+func (x *TaskProgressUpdate) GetStage() string {
+	if x != nil {
+		return x.Stage
+	}
+	return ""
+}
+
+func (x *TaskProgressUpdate) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+type TaskLogEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Level         TaskLogEntry_Level     `protobuf:"varint,1,opt,name=level,proto3,enum=codegen.v1.TaskLogEntry_Level" json:"level,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	TimestampMs   int64                  `protobuf:"varint,3,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	Source        string                 `protobuf:"bytes,4,opt,name=source,proto3" json:"source,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskLogEntry) Reset() {
+	*x = TaskLogEntry{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskLogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskLogEntry) ProtoMessage() {}
+
+func (x *TaskLogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskLogEntry.ProtoReflect.Descriptor instead.
+func (*TaskLogEntry) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *TaskLogEntry) GetLevel() TaskLogEntry_Level {
+	if x != nil {
+		return x.Level
+	}
+	return TaskLogEntry_LEVEL_UNSPECIFIED
+}
+
+func (x *TaskLogEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *TaskLogEntry) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
+func (x *TaskLogEntry) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+type TaskStreamResult struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Status        TaskStreamResult_Status `protobuf:"varint,1,opt,name=status,proto3,enum=codegen.v1.TaskStreamResult_Status" json:"status,omitempty"`
+	Outputs       map[string]string       `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Artifacts     []string                `protobuf:"bytes,3,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
+	Metadata      *TaskExecutionMetadata  `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskStreamResult) Reset() {
+	*x = TaskStreamResult{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskStreamResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskStreamResult) ProtoMessage() {}
+
+func (x *TaskStreamResult) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskStreamResult.ProtoReflect.Descriptor instead.
+func (*TaskStreamResult) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *TaskStreamResult) GetStatus() TaskStreamResult_Status {
+	if x != nil {
+		return x.Status
+	}
+	return TaskStreamResult_STATUS_UNSPECIFIED
+}
+
+func (x *TaskStreamResult) GetOutputs() map[string]string {
+	if x != nil {
+		return x.Outputs
+	}
+	return nil
+}
+
+func (x *TaskStreamResult) GetArtifacts() []string {
+	if x != nil {
+		return x.Artifacts
+	}
+	return nil
+}
+
+func (x *TaskStreamResult) GetMetadata() *TaskExecutionMetadata {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type TaskExecutionMetadata struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	StartTimeMs   int64                  `protobuf:"varint,1,opt,name=start_time_ms,json=startTimeMs,proto3" json:"start_time_ms,omitempty"`
+	EndTimeMs     int64                  `protobuf:"varint,2,opt,name=end_time_ms,json=endTimeMs,proto3" json:"end_time_ms,omitempty"`
+	DurationMs    int64                  `protobuf:"varint,3,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
+	PeakUsage     *ResourceUsage         `protobuf:"bytes,4,opt,name=peak_usage,json=peakUsage,proto3" json:"peak_usage,omitempty"`
+	ExitCode      int32                  `protobuf:"varint,5,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskExecutionMetadata) Reset() {
+	*x = TaskExecutionMetadata{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskExecutionMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskExecutionMetadata) ProtoMessage() {}
+
+func (x *TaskExecutionMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskExecutionMetadata.ProtoReflect.Descriptor instead.
+func (*TaskExecutionMetadata) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *TaskExecutionMetadata) GetStartTimeMs() int64 {
+	if x != nil {
+		return x.StartTimeMs
+	}
+	return 0
+}
+
+func (x *TaskExecutionMetadata) GetEndTimeMs() int64 {
+	if x != nil {
+		return x.EndTimeMs
+	}
+	return 0
+}
+
+func (x *TaskExecutionMetadata) GetDurationMs() int64 {
+	if x != nil {
+		return x.DurationMs
+	}
+	return 0
+}
+
+func (x *TaskExecutionMetadata) GetPeakUsage() *ResourceUsage {
+	if x != nil {
+		return x.PeakUsage
+	}
+	return nil
+}
+
+func (x *TaskExecutionMetadata) GetExitCode() int32 {
+	if x != nil {
+		return x.ExitCode
+	}
+	return 0
+}
+
+type TaskStreamError struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Code          string                 `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Details       string                 `protobuf:"bytes,3,opt,name=details,proto3" json:"details,omitempty"`
+	Retriable     bool                   `protobuf:"varint,4,opt,name=retriable,proto3" json:"retriable,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TaskStreamError) Reset() {
+	*x = TaskStreamError{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TaskStreamError) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TaskStreamError) ProtoMessage() {}
+
+func (x *TaskStreamError) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TaskStreamError.ProtoReflect.Descriptor instead.
+func (*TaskStreamError) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *TaskStreamError) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *TaskStreamError) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *TaskStreamError) GetDetails() string {
+	if x != nil {
+		return x.Details
+	}
+	return ""
+}
+
+func (x *TaskStreamError) GetRetriable() bool {
+	if x != nil {
+		return x.Retriable
+	}
+	return false
+}
+
+type StreamKeepAlive struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TimestampMs   int64                  `protobuf:"varint,1,opt,name=timestamp_ms,json=timestampMs,proto3" json:"timestamp_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *StreamKeepAlive) Reset() {
+	*x = StreamKeepAlive{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *StreamKeepAlive) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*StreamKeepAlive) ProtoMessage() {}
+
+func (x *StreamKeepAlive) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use StreamKeepAlive.ProtoReflect.Descriptor instead.
+func (*StreamKeepAlive) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *StreamKeepAlive) GetTimestampMs() int64 {
+	if x != nil {
+		return x.TimestampMs
+	}
+	return 0
+}
+
+// SessionCreateRequest is sent by coordinator to worker to create a new session
+type SessionCreateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`                                                                     // Session ID to create
+	WorkspaceId   string                 `protobuf:"bytes,2,opt,name=workspace_id,json=workspaceId,proto3" json:"workspace_id,omitempty"`                                                               // Workspace identifier
+	UserId        string                 `protobuf:"bytes,3,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`                                                                              // User/tenant identifier
+	EnvVars       map[string]string      `protobuf:"bytes,4,rep,name=env_vars,json=envVars,proto3" json:"env_vars,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Environment variables for session
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionCreateRequest) Reset() {
+	*x = SessionCreateRequest{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionCreateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionCreateRequest) ProtoMessage() {}
+
+func (x *SessionCreateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionCreateRequest.ProtoReflect.Descriptor instead.
+func (*SessionCreateRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *SessionCreateRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SessionCreateRequest) GetWorkspaceId() string {
+	if x != nil {
+		return x.WorkspaceId
+	}
+	return ""
+}
+
+func (x *SessionCreateRequest) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
+func (x *SessionCreateRequest) GetEnvVars() map[string]string {
+	if x != nil {
+		return x.EnvVars
+	}
+	return nil
+}
+
+// SessionCreateResponse is sent by worker to coordinator after session creation
+type SessionCreateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // Session ID that was created
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`                     // Whether creation succeeded
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`                          // Error message if failed
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SessionCreateResponse) Reset() {
+	*x = SessionCreateResponse{}
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SessionCreateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SessionCreateResponse) ProtoMessage() {}
+
+func (x *SessionCreateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_worker_lifecycle_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SessionCreateResponse.ProtoReflect.Descriptor instead.
+func (*SessionCreateResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *SessionCreateResponse) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+func (x *SessionCreateResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *SessionCreateResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
 var File_api_proto_v1_worker_lifecycle_proto protoreflect.FileDescriptor
 
 const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"\n" +
 	"#api/proto/v1/worker_lifecycle.proto\x12\n" +
-	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\x82\x02\n" +
+	"codegen.v1\x1a\x19api/proto/v1/common.proto\x1a!api/proto/v1/task_execution.proto\"\x82\x02\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1d\n" +
 	"\n" +
@@ -726,11 +1691,100 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x16\n" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\"8\n" +
 	"\x12DeregisterResponse\x12\"\n" +
-	"\facknowledged\x18\x01 \x01(\bR\facknowledged2\xfb\x01\n" +
+	"\facknowledged\x18\x01 \x01(\bR\facknowledged\"\xf0\x02\n" +
+	"\x11TaskStreamMessage\x12<\n" +
+	"\n" +
+	"assignment\x18\x01 \x01(\v2\x1a.codegen.v1.TaskAssignmentH\x00R\n" +
+	"assignment\x12<\n" +
+	"\bresponse\x18\x02 \x01(\v2\x1e.codegen.v1.TaskStreamResponseH\x00R\bresponse\x12;\n" +
+	"\tkeepalive\x18\x03 \x01(\v2\x1b.codegen.v1.StreamKeepAliveH\x00R\tkeepalive\x12I\n" +
+	"\x0esession_create\x18\x04 \x01(\v2 .codegen.v1.SessionCreateRequestH\x00R\rsessionCreate\x12L\n" +
+	"\x0fsession_created\x18\x05 \x01(\v2!.codegen.v1.SessionCreateResponseH\x00R\x0esessionCreatedB\t\n" +
+	"\amessage\"\xe3\x02\n" +
+	"\x0eTaskAssignment\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1b\n" +
+	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12G\n" +
+	"\targuments\x18\x04 \x03(\v2).codegen.v1.TaskAssignment.ArgumentsEntryR\targuments\x121\n" +
+	"\acontext\x18\x05 \x01(\v2\x17.codegen.v1.TaskContextR\acontext\x12B\n" +
+	"\vconstraints\x18\x06 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x1a<\n" +
+	"\x0eArgumentsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x91\x02\n" +
+	"\x12TaskStreamResponse\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12<\n" +
+	"\bprogress\x18\x02 \x01(\v2\x1e.codegen.v1.TaskProgressUpdateH\x00R\bprogress\x12,\n" +
+	"\x03log\x18\x03 \x01(\v2\x18.codegen.v1.TaskLogEntryH\x00R\x03log\x126\n" +
+	"\x06result\x18\x04 \x01(\v2\x1c.codegen.v1.TaskStreamResultH\x00R\x06result\x123\n" +
+	"\x05error\x18\x05 \x01(\v2\x1b.codegen.v1.TaskStreamErrorH\x00R\x05errorB\t\n" +
+	"\apayload\"o\n" +
+	"\x12TaskProgressUpdate\x12)\n" +
+	"\x10percent_complete\x18\x01 \x01(\x05R\x0fpercentComplete\x12\x14\n" +
+	"\x05stage\x18\x02 \x01(\tR\x05stage\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"\xfb\x01\n" +
+	"\fTaskLogEntry\x124\n" +
+	"\x05level\x18\x01 \x01(\x0e2\x1e.codegen.v1.TaskLogEntry.LevelR\x05level\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12!\n" +
+	"\ftimestamp_ms\x18\x03 \x01(\x03R\vtimestampMs\x12\x16\n" +
+	"\x06source\x18\x04 \x01(\tR\x06source\"`\n" +
+	"\x05Level\x12\x15\n" +
+	"\x11LEVEL_UNSPECIFIED\x10\x00\x12\x0f\n" +
+	"\vLEVEL_DEBUG\x10\x01\x12\x0e\n" +
+	"\n" +
+	"LEVEL_INFO\x10\x02\x12\x0e\n" +
+	"\n" +
+	"LEVEL_WARN\x10\x03\x12\x0f\n" +
+	"\vLEVEL_ERROR\x10\x04\"\xa1\x03\n" +
+	"\x10TaskStreamResult\x12;\n" +
+	"\x06status\x18\x01 \x01(\x0e2#.codegen.v1.TaskStreamResult.StatusR\x06status\x12C\n" +
+	"\aoutputs\x18\x02 \x03(\v2).codegen.v1.TaskStreamResult.OutputsEntryR\aoutputs\x12\x1c\n" +
+	"\tartifacts\x18\x03 \x03(\tR\tartifacts\x12=\n" +
+	"\bmetadata\x18\x04 \x01(\v2!.codegen.v1.TaskExecutionMetadataR\bmetadata\x1a:\n" +
+	"\fOutputsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"r\n" +
+	"\x06Status\x12\x16\n" +
+	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
+	"\x0eSTATUS_SUCCESS\x10\x01\x12\x12\n" +
+	"\x0eSTATUS_FAILURE\x10\x02\x12\x12\n" +
+	"\x0eSTATUS_TIMEOUT\x10\x03\x12\x14\n" +
+	"\x10STATUS_CANCELLED\x10\x04\"\xd3\x01\n" +
+	"\x15TaskExecutionMetadata\x12\"\n" +
+	"\rstart_time_ms\x18\x01 \x01(\x03R\vstartTimeMs\x12\x1e\n" +
+	"\vend_time_ms\x18\x02 \x01(\x03R\tendTimeMs\x12\x1f\n" +
+	"\vduration_ms\x18\x03 \x01(\x03R\n" +
+	"durationMs\x128\n" +
+	"\n" +
+	"peak_usage\x18\x04 \x01(\v2\x19.codegen.v1.ResourceUsageR\tpeakUsage\x12\x1b\n" +
+	"\texit_code\x18\x05 \x01(\x05R\bexitCode\"w\n" +
+	"\x0fTaskStreamError\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x18\n" +
+	"\adetails\x18\x03 \x01(\tR\adetails\x12\x1c\n" +
+	"\tretriable\x18\x04 \x01(\bR\tretriable\"4\n" +
+	"\x0fStreamKeepAlive\x12!\n" +
+	"\ftimestamp_ms\x18\x01 \x01(\x03R\vtimestampMs\"\xf7\x01\n" +
+	"\x14SessionCreateRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12!\n" +
+	"\fworkspace_id\x18\x02 \x01(\tR\vworkspaceId\x12\x17\n" +
+	"\auser_id\x18\x03 \x01(\tR\x06userId\x12H\n" +
+	"\benv_vars\x18\x04 \x03(\v2-.codegen.v1.SessionCreateRequest.EnvVarsEntryR\aenvVars\x1a:\n" +
+	"\fEnvVarsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"f\n" +
+	"\x15SessionCreateResponse\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error2\xcb\x02\n" +
 	"\x0fWorkerLifecycle\x12K\n" +
 	"\x0eRegisterWorker\x12\x1b.codegen.v1.RegisterRequest\x1a\x1c.codegen.v1.RegisterResponse\x12H\n" +
 	"\tHeartbeat\x12\x1c.codegen.v1.HeartbeatRequest\x1a\x1d.codegen.v1.HeartbeatResponse\x12Q\n" +
-	"\x10DeregisterWorker\x12\x1d.codegen.v1.DeregisterRequest\x1a\x1e.codegen.v1.DeregisterResponseB9Z7github.com/altairalabs/codegen-mcp/api/proto/v1;protov1b\x06proto3"
+	"\x10DeregisterWorker\x12\x1d.codegen.v1.DeregisterRequest\x1a\x1e.codegen.v1.DeregisterResponse\x12N\n" +
+	"\n" +
+	"TaskStream\x12\x1d.codegen.v1.TaskStreamMessage\x1a\x1d.codegen.v1.TaskStreamMessage(\x010\x01B9Z7github.com/altairalabs/codegen-mcp/api/proto/v1;protov1b\x06proto3"
 
 var (
 	file_api_proto_v1_worker_lifecycle_proto_rawDescOnce sync.Once
@@ -744,44 +1798,82 @@ func file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP() []byte {
 	return file_api_proto_v1_worker_lifecycle_proto_rawDescData
 }
 
-var file_api_proto_v1_worker_lifecycle_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_proto_v1_worker_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_api_proto_v1_worker_lifecycle_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_api_proto_v1_worker_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_api_proto_v1_worker_lifecycle_proto_goTypes = []any{
-	(WorkerStatus_State)(0),    // 0: codegen.v1.WorkerStatus.State
-	(*RegisterRequest)(nil),    // 1: codegen.v1.RegisterRequest
-	(*WorkerCapabilities)(nil), // 2: codegen.v1.WorkerCapabilities
-	(*RegisterResponse)(nil),   // 3: codegen.v1.RegisterResponse
-	(*HeartbeatRequest)(nil),   // 4: codegen.v1.HeartbeatRequest
-	(*SessionCapacity)(nil),    // 5: codegen.v1.SessionCapacity
-	(*WorkerStatus)(nil),       // 6: codegen.v1.WorkerStatus
-	(*HeartbeatResponse)(nil),  // 7: codegen.v1.HeartbeatResponse
-	(*DeregisterRequest)(nil),  // 8: codegen.v1.DeregisterRequest
-	(*DeregisterResponse)(nil), // 9: codegen.v1.DeregisterResponse
-	nil,                        // 10: codegen.v1.WorkerCapabilities.MetadataEntry
-	(*ResourceLimits)(nil),     // 11: codegen.v1.ResourceLimits
-	(*SessionInfo)(nil),        // 12: codegen.v1.SessionInfo
-	(*ResourceUsage)(nil),      // 13: codegen.v1.ResourceUsage
+	(WorkerStatus_State)(0),       // 0: codegen.v1.WorkerStatus.State
+	(TaskLogEntry_Level)(0),       // 1: codegen.v1.TaskLogEntry.Level
+	(TaskStreamResult_Status)(0),  // 2: codegen.v1.TaskStreamResult.Status
+	(*RegisterRequest)(nil),       // 3: codegen.v1.RegisterRequest
+	(*WorkerCapabilities)(nil),    // 4: codegen.v1.WorkerCapabilities
+	(*RegisterResponse)(nil),      // 5: codegen.v1.RegisterResponse
+	(*HeartbeatRequest)(nil),      // 6: codegen.v1.HeartbeatRequest
+	(*SessionCapacity)(nil),       // 7: codegen.v1.SessionCapacity
+	(*WorkerStatus)(nil),          // 8: codegen.v1.WorkerStatus
+	(*HeartbeatResponse)(nil),     // 9: codegen.v1.HeartbeatResponse
+	(*DeregisterRequest)(nil),     // 10: codegen.v1.DeregisterRequest
+	(*DeregisterResponse)(nil),    // 11: codegen.v1.DeregisterResponse
+	(*TaskStreamMessage)(nil),     // 12: codegen.v1.TaskStreamMessage
+	(*TaskAssignment)(nil),        // 13: codegen.v1.TaskAssignment
+	(*TaskStreamResponse)(nil),    // 14: codegen.v1.TaskStreamResponse
+	(*TaskProgressUpdate)(nil),    // 15: codegen.v1.TaskProgressUpdate
+	(*TaskLogEntry)(nil),          // 16: codegen.v1.TaskLogEntry
+	(*TaskStreamResult)(nil),      // 17: codegen.v1.TaskStreamResult
+	(*TaskExecutionMetadata)(nil), // 18: codegen.v1.TaskExecutionMetadata
+	(*TaskStreamError)(nil),       // 19: codegen.v1.TaskStreamError
+	(*StreamKeepAlive)(nil),       // 20: codegen.v1.StreamKeepAlive
+	(*SessionCreateRequest)(nil),  // 21: codegen.v1.SessionCreateRequest
+	(*SessionCreateResponse)(nil), // 22: codegen.v1.SessionCreateResponse
+	nil,                           // 23: codegen.v1.WorkerCapabilities.MetadataEntry
+	nil,                           // 24: codegen.v1.TaskAssignment.ArgumentsEntry
+	nil,                           // 25: codegen.v1.TaskStreamResult.OutputsEntry
+	nil,                           // 26: codegen.v1.SessionCreateRequest.EnvVarsEntry
+	(*ResourceLimits)(nil),        // 27: codegen.v1.ResourceLimits
+	(*SessionInfo)(nil),           // 28: codegen.v1.SessionInfo
+	(*ResourceUsage)(nil),         // 29: codegen.v1.ResourceUsage
+	(*TaskContext)(nil),           // 30: codegen.v1.TaskContext
+	(*ExecutionConstraints)(nil),  // 31: codegen.v1.ExecutionConstraints
 }
 var file_api_proto_v1_worker_lifecycle_proto_depIdxs = []int32{
-	2,  // 0: codegen.v1.RegisterRequest.capabilities:type_name -> codegen.v1.WorkerCapabilities
-	11, // 1: codegen.v1.RegisterRequest.limits:type_name -> codegen.v1.ResourceLimits
-	10, // 2: codegen.v1.WorkerCapabilities.metadata:type_name -> codegen.v1.WorkerCapabilities.MetadataEntry
-	6,  // 3: codegen.v1.HeartbeatRequest.status:type_name -> codegen.v1.WorkerStatus
-	5,  // 4: codegen.v1.HeartbeatRequest.capacity:type_name -> codegen.v1.SessionCapacity
-	12, // 5: codegen.v1.SessionCapacity.sessions:type_name -> codegen.v1.SessionInfo
+	4,  // 0: codegen.v1.RegisterRequest.capabilities:type_name -> codegen.v1.WorkerCapabilities
+	27, // 1: codegen.v1.RegisterRequest.limits:type_name -> codegen.v1.ResourceLimits
+	23, // 2: codegen.v1.WorkerCapabilities.metadata:type_name -> codegen.v1.WorkerCapabilities.MetadataEntry
+	8,  // 3: codegen.v1.HeartbeatRequest.status:type_name -> codegen.v1.WorkerStatus
+	7,  // 4: codegen.v1.HeartbeatRequest.capacity:type_name -> codegen.v1.SessionCapacity
+	28, // 5: codegen.v1.SessionCapacity.sessions:type_name -> codegen.v1.SessionInfo
 	0,  // 6: codegen.v1.WorkerStatus.state:type_name -> codegen.v1.WorkerStatus.State
-	13, // 7: codegen.v1.WorkerStatus.current_usage:type_name -> codegen.v1.ResourceUsage
-	1,  // 8: codegen.v1.WorkerLifecycle.RegisterWorker:input_type -> codegen.v1.RegisterRequest
-	4,  // 9: codegen.v1.WorkerLifecycle.Heartbeat:input_type -> codegen.v1.HeartbeatRequest
-	8,  // 10: codegen.v1.WorkerLifecycle.DeregisterWorker:input_type -> codegen.v1.DeregisterRequest
-	3,  // 11: codegen.v1.WorkerLifecycle.RegisterWorker:output_type -> codegen.v1.RegisterResponse
-	7,  // 12: codegen.v1.WorkerLifecycle.Heartbeat:output_type -> codegen.v1.HeartbeatResponse
-	9,  // 13: codegen.v1.WorkerLifecycle.DeregisterWorker:output_type -> codegen.v1.DeregisterResponse
-	11, // [11:14] is the sub-list for method output_type
-	8,  // [8:11] is the sub-list for method input_type
-	8,  // [8:8] is the sub-list for extension type_name
-	8,  // [8:8] is the sub-list for extension extendee
-	0,  // [0:8] is the sub-list for field type_name
+	29, // 7: codegen.v1.WorkerStatus.current_usage:type_name -> codegen.v1.ResourceUsage
+	13, // 8: codegen.v1.TaskStreamMessage.assignment:type_name -> codegen.v1.TaskAssignment
+	14, // 9: codegen.v1.TaskStreamMessage.response:type_name -> codegen.v1.TaskStreamResponse
+	20, // 10: codegen.v1.TaskStreamMessage.keepalive:type_name -> codegen.v1.StreamKeepAlive
+	21, // 11: codegen.v1.TaskStreamMessage.session_create:type_name -> codegen.v1.SessionCreateRequest
+	22, // 12: codegen.v1.TaskStreamMessage.session_created:type_name -> codegen.v1.SessionCreateResponse
+	24, // 13: codegen.v1.TaskAssignment.arguments:type_name -> codegen.v1.TaskAssignment.ArgumentsEntry
+	30, // 14: codegen.v1.TaskAssignment.context:type_name -> codegen.v1.TaskContext
+	31, // 15: codegen.v1.TaskAssignment.constraints:type_name -> codegen.v1.ExecutionConstraints
+	15, // 16: codegen.v1.TaskStreamResponse.progress:type_name -> codegen.v1.TaskProgressUpdate
+	16, // 17: codegen.v1.TaskStreamResponse.log:type_name -> codegen.v1.TaskLogEntry
+	17, // 18: codegen.v1.TaskStreamResponse.result:type_name -> codegen.v1.TaskStreamResult
+	19, // 19: codegen.v1.TaskStreamResponse.error:type_name -> codegen.v1.TaskStreamError
+	1,  // 20: codegen.v1.TaskLogEntry.level:type_name -> codegen.v1.TaskLogEntry.Level
+	2,  // 21: codegen.v1.TaskStreamResult.status:type_name -> codegen.v1.TaskStreamResult.Status
+	25, // 22: codegen.v1.TaskStreamResult.outputs:type_name -> codegen.v1.TaskStreamResult.OutputsEntry
+	18, // 23: codegen.v1.TaskStreamResult.metadata:type_name -> codegen.v1.TaskExecutionMetadata
+	29, // 24: codegen.v1.TaskExecutionMetadata.peak_usage:type_name -> codegen.v1.ResourceUsage
+	26, // 25: codegen.v1.SessionCreateRequest.env_vars:type_name -> codegen.v1.SessionCreateRequest.EnvVarsEntry
+	3,  // 26: codegen.v1.WorkerLifecycle.RegisterWorker:input_type -> codegen.v1.RegisterRequest
+	6,  // 27: codegen.v1.WorkerLifecycle.Heartbeat:input_type -> codegen.v1.HeartbeatRequest
+	10, // 28: codegen.v1.WorkerLifecycle.DeregisterWorker:input_type -> codegen.v1.DeregisterRequest
+	12, // 29: codegen.v1.WorkerLifecycle.TaskStream:input_type -> codegen.v1.TaskStreamMessage
+	5,  // 30: codegen.v1.WorkerLifecycle.RegisterWorker:output_type -> codegen.v1.RegisterResponse
+	9,  // 31: codegen.v1.WorkerLifecycle.Heartbeat:output_type -> codegen.v1.HeartbeatResponse
+	11, // 32: codegen.v1.WorkerLifecycle.DeregisterWorker:output_type -> codegen.v1.DeregisterResponse
+	12, // 33: codegen.v1.WorkerLifecycle.TaskStream:output_type -> codegen.v1.TaskStreamMessage
+	30, // [30:34] is the sub-list for method output_type
+	26, // [26:30] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_v1_worker_lifecycle_proto_init() }
@@ -790,13 +1882,27 @@ func file_api_proto_v1_worker_lifecycle_proto_init() {
 		return
 	}
 	file_api_proto_v1_common_proto_init()
+	file_api_proto_v1_task_execution_proto_init()
+	file_api_proto_v1_worker_lifecycle_proto_msgTypes[9].OneofWrappers = []any{
+		(*TaskStreamMessage_Assignment)(nil),
+		(*TaskStreamMessage_Response)(nil),
+		(*TaskStreamMessage_Keepalive)(nil),
+		(*TaskStreamMessage_SessionCreate)(nil),
+		(*TaskStreamMessage_SessionCreated)(nil),
+	}
+	file_api_proto_v1_worker_lifecycle_proto_msgTypes[11].OneofWrappers = []any{
+		(*TaskStreamResponse_Progress)(nil),
+		(*TaskStreamResponse_Log)(nil),
+		(*TaskStreamResponse_Result)(nil),
+		(*TaskStreamResponse_Error)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_worker_lifecycle_proto_rawDesc), len(file_api_proto_v1_worker_lifecycle_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   10,
+			NumEnums:      3,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

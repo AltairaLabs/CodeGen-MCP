@@ -454,9 +454,6 @@ func TestGetOrCreateSession_NewSession(t *testing.T) {
 	// Register a mock worker with capacity
 	mockWorker := &RegisteredWorker{
 		WorkerID: "test-worker",
-		Client: WorkerServiceClient{
-			SessionMgmt: &mockSessionMgmtClient{},
-		},
 		Status: &protov1.WorkerStatus{
 			State:       protov1.WorkerStatus_STATE_IDLE,
 			ActiveTasks: 0,
@@ -465,8 +462,11 @@ func TestGetOrCreateSession_NewSession(t *testing.T) {
 			TotalSessions:     5,
 			AvailableSessions: 5,
 		},
-		LastHeartbeat:     time.Now(),
-		HeartbeatInterval: 30 * time.Second,
+		TaskStream:            nil, // No stream for this test
+		PendingTasks:          make(map[string]chan *protov1.TaskStreamResponse),
+		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
+		LastHeartbeat:         time.Now(),
+		HeartbeatInterval:     30 * time.Second,
 	}
 	_ = registry.RegisterWorker("test-worker", mockWorker)
 
@@ -520,9 +520,6 @@ func TestGetOrCreateSession_ExistingSession(t *testing.T) {
 	// Register a mock worker with capacity
 	mockWorker := &RegisteredWorker{
 		WorkerID: "test-worker",
-		Client: WorkerServiceClient{
-			SessionMgmt: &mockSessionMgmtClient{},
-		},
 		Status: &protov1.WorkerStatus{
 			State:       protov1.WorkerStatus_STATE_IDLE,
 			ActiveTasks: 0,
@@ -531,8 +528,11 @@ func TestGetOrCreateSession_ExistingSession(t *testing.T) {
 			TotalSessions:     5,
 			AvailableSessions: 5,
 		},
-		LastHeartbeat:     time.Now(),
-		HeartbeatInterval: 30 * time.Second,
+		TaskStream:            nil, // No stream for this test
+		PendingTasks:          make(map[string]chan *protov1.TaskStreamResponse),
+		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
+		LastHeartbeat:         time.Now(),
+		HeartbeatInterval:     30 * time.Second,
 	}
 	_ = registry.RegisterWorker("test-worker", mockWorker)
 

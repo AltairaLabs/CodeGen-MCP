@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
@@ -69,56 +68,28 @@ func (cs *CoordinatorServer) RegisterWorker(
 		}
 	}
 
-	// Create gRPC clients for this worker if grpc_address is provided
+	// Register the worker - task stream will be established separately via TaskStream RPC
 	sessionID := fmt.Sprintf("reg-%s-%d", req.WorkerId, time.Now().UnixNano())
 	const defaultHeartbeatInterval = 30 * time.Second
 	heartbeatInterval := defaultHeartbeatInterval
 
-	var workerClient WorkerServiceClient
-	if req.GrpcAddress != "" {
-		// Establish gRPC connection to worker
-		conn, err := grpc.NewClient(
-			req.GrpcAddress,
-			grpc.WithTransportCredentials(insecure.NewCredentials()),
-		)
-		if err != nil {
-			cs.logger.Error("Failed to create gRPC client for worker",
-				"worker_id", req.WorkerId,
-				"grpc_address", req.GrpcAddress,
-				"error", err)
-			return &protov1.RegisterResponse{
-				Accepted: false,
-				Reason:   fmt.Sprintf("failed to connect to worker: %v", err),
-			}, nil
-		}
-
-		// Create service clients
-		workerClient = WorkerServiceClient{
-			SessionMgmt: protov1.NewSessionManagementClient(conn),
-			TaskExec:    protov1.NewTaskExecutionClient(conn),
-			Artifacts:   protov1.NewArtifactServiceClient(conn),
-		}
-
-		cs.logger.Info("Created gRPC clients for worker",
-			"worker_id", req.WorkerId,
-			"grpc_address", req.GrpcAddress)
-	} else {
-		cs.logger.Warn("Worker registered without grpc_address - task routing will not work",
-			"worker_id", req.WorkerId)
-	}
+	cs.logger.Info("Registering worker without task stream (will be established via TaskStream RPC)",
+		"worker_id", req.WorkerId)
 
 	// Register the worker
 	worker := &RegisteredWorker{
-		WorkerID:          req.WorkerId,
-		SessionID:         sessionID,
-		Client:            workerClient,
-		Capabilities:      req.Capabilities,
-		Limits:            req.Limits,
-		Status:            nil, // Will be updated on first heartbeat
-		Capacity:          nil, // Will be updated on first heartbeat
-		LastHeartbeat:     time.Now(),
-		RegisteredAt:      time.Now(),
-		HeartbeatInterval: heartbeatInterval,
+		WorkerID:              req.WorkerId,
+		SessionID:             sessionID,
+		TaskStream:            nil, // Will be set when worker calls TaskStream RPC
+		PendingTasks:          make(map[string]chan *protov1.TaskStreamResponse),
+		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
+		Capabilities:          req.Capabilities,
+		Limits:                req.Limits,
+		Status:                nil, // Will be updated on first heartbeat
+		Capacity:              nil, // Will be updated on first heartbeat
+		LastHeartbeat:         time.Now(),
+		RegisteredAt:          time.Now(),
+		HeartbeatInterval:     heartbeatInterval,
 	}
 
 	if err := cs.workerRegistry.RegisterWorker(req.WorkerId, worker); err != nil {
@@ -271,6 +242,256 @@ func (cs *CoordinatorServer) StartCleanupLoop(ctx context.Context, interval time
 				cs.logger.Info("Cleaned up stale workers", "count", removed)
 			}
 		}
+	}
+}
+
+// TaskStream handles the bidirectional stream for task assignment
+// Worker opens this stream and coordinator sends tasks over it
+func (cs *CoordinatorServer) TaskStream(stream protov1.WorkerLifecycle_TaskStreamServer) error {
+	ctx := stream.Context()
+
+	// TODO: In production, first message should be worker authentication
+	// For now, we'll wait for the initial keepalive to identify the worker
+	// This is a temporary workaround - we need proper authentication
+
+	cs.logger.Info("Worker task stream connected, waiting for identification")
+
+	var workerID string
+	var worker *RegisteredWorker
+
+	// Create a channel for receiving messages asynchronously
+	// This allows us to properly handle context cancellation
+	msgChan := make(chan *protov1.TaskStreamMessage, 10)
+	errChan := make(chan error, 1)
+
+	// Start goroutine to receive messages
+	go func() {
+		for {
+			msg, err := stream.Recv()
+			if err != nil {
+				errChan <- err
+				return
+			}
+			msgChan <- msg
+		}
+	}()
+
+	// Cleanup function
+	defer func() {
+		if worker != nil {
+			worker.mu.Lock()
+			worker.TaskStream = nil
+			worker.mu.Unlock()
+		}
+	}()
+
+	// Keep stream alive and handle incoming messages
+	for {
+		select {
+		case <-ctx.Done():
+			cs.logger.Info("Task stream context cancelled", "worker_id", workerID)
+			return ctx.Err()
+
+		case err := <-errChan:
+			cs.logger.Error("Error receiving from task stream", "error", err, "worker_id", workerID)
+			return err
+
+		case msg := <-msgChan:
+			// Handle different message types
+			switch payload := msg.Message.(type) {
+			case *protov1.TaskStreamMessage_Response:
+				// Worker sending task response
+				// If worker not yet identified, try to identify by pending task
+				if workerID == "" {
+					taskID := payload.Response.TaskId
+					cs.workerRegistry.mu.RLock()
+					for _, w := range cs.workerRegistry.workers {
+						w.mu.RLock()
+						if _, ok := w.PendingTasks[taskID]; ok {
+							workerID = w.WorkerID
+							worker = w
+							w.mu.RUnlock()
+							break
+						}
+						w.mu.RUnlock()
+					}
+					cs.workerRegistry.mu.RUnlock()
+
+					if workerID == "" {
+						cs.logger.Error("Could not identify worker for task response", "task_id", taskID)
+						continue
+					}
+
+					// Store stream reference in worker
+					worker.mu.Lock()
+					worker.TaskStream = stream
+					worker.mu.Unlock()
+
+					cs.logger.Info("Associated stream with worker via task response", "worker_id", workerID)
+				}
+
+				cs.handleTaskStreamResponse(ctx, workerID, payload.Response)
+
+			case *protov1.TaskStreamMessage_Keepalive:
+				// Keepalive message - use this to identify worker on first message
+				if workerID == "" {
+					// Find the most recently registered worker without a task stream
+					// This assumes workers connect their task stream shortly after registration
+					cs.workerRegistry.mu.RLock()
+					var candidates []*RegisteredWorker
+					for _, w := range cs.workerRegistry.workers {
+						w.mu.RLock()
+						if w.TaskStream == nil {
+							candidates = append(candidates, w)
+						}
+						w.mu.RUnlock()
+					}
+					cs.workerRegistry.mu.RUnlock()
+
+					if len(candidates) == 1 {
+						// Only one worker without a stream, must be this one
+						worker = candidates[0]
+						workerID = worker.WorkerID
+
+						worker.mu.Lock()
+						worker.TaskStream = stream
+						worker.mu.Unlock()
+
+						cs.logger.Info("Associated stream with worker via keepalive",
+							"worker_id", workerID,
+							"timestamp_ms", payload.Keepalive.TimestampMs)
+					} else if len(candidates) > 1 {
+						cs.logger.Warn("Multiple workers without streams, cannot identify worker from keepalive alone",
+							"candidate_count", len(candidates))
+					} else {
+						cs.logger.Warn("Received keepalive but all workers already have streams")
+					}
+				} else {
+					cs.logger.Debug("Received keepalive from worker", "worker_id", workerID)
+				}
+
+			case *protov1.TaskStreamMessage_SessionCreated:
+				// Worker responded to session create request
+				resp := payload.SessionCreated
+				// If worker not yet identified, try to identify by the session id in pending maps
+				if workerID == "" {
+					cs.workerRegistry.mu.RLock()
+					for _, w := range cs.workerRegistry.workers {
+						w.mu.RLock()
+						if _, ok := w.PendingSessionCreates[resp.SessionId]; ok {
+							worker = w
+							workerID = w.WorkerID
+							w.mu.RUnlock()
+							break
+						}
+						w.mu.RUnlock()
+					}
+					cs.workerRegistry.mu.RUnlock()
+					if worker != nil {
+						worker.mu.Lock()
+						worker.TaskStream = stream
+						worker.mu.Unlock()
+						cs.logger.Info("Associated stream with worker via session create response", "worker_id", workerID)
+					}
+				}
+
+				// Update session state based on worker response
+				if resp.Success {
+					// Find the coordinator session by worker session ID
+					// We need to look through sessions to find the one with this WorkerSessionID
+					allSessions := cs.sessionManager.GetAllSessions()
+					var coordSessionID string
+					for id, session := range allSessions {
+						if session.WorkerSessionID == resp.SessionId {
+							coordSessionID = id
+							break
+						}
+					}
+
+					if coordSessionID != "" {
+						if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateReady, ""); err == nil {
+							cs.logger.Info("Session ready on worker",
+								"session_id", coordSessionID,
+								"worker_session_id", resp.SessionId,
+								"worker_id", workerID)
+						}
+					}
+				} else {
+					// Session creation failed
+					allSessions := cs.sessionManager.GetAllSessions()
+					var coordSessionID string
+					for id, session := range allSessions {
+						if session.WorkerSessionID == resp.SessionId {
+							coordSessionID = id
+							break
+						}
+					}
+
+					if coordSessionID != "" {
+						if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateFailed, resp.Error); err == nil {
+							cs.logger.Error("Session creation failed on worker",
+								"session_id", coordSessionID,
+								"worker_session_id", resp.SessionId,
+								"worker_id", workerID,
+								"error", resp.Error)
+						}
+					}
+				}
+
+				// Route response to any waiting channel (for any legacy blocking code)
+				if worker != nil {
+					worker.mu.RLock()
+					ch, ok := worker.PendingSessionCreates[resp.SessionId]
+					worker.mu.RUnlock()
+					if ok {
+						select {
+						case ch <- resp:
+						default:
+						}
+					}
+				}
+
+			default:
+				cs.logger.Warn("Unknown task stream message type")
+			}
+		}
+	}
+}
+
+// handleTaskStreamResponse processes task responses from workers and routes them to waiting channels
+func (cs *CoordinatorServer) handleTaskStreamResponse(ctx context.Context, workerID string, response *protov1.TaskStreamResponse) {
+	taskID := response.TaskId
+
+	cs.logger.Debug("Received task response",
+		"task_id", taskID,
+		"worker_id", workerID,
+		"has_result", response.GetResult() != nil,
+		"has_error", response.GetError() != nil)
+
+	// Find worker and route response to pending task channel
+	worker := cs.workerRegistry.GetWorker(workerID)
+	if worker == nil {
+		cs.logger.Error("Received response from unknown worker", "worker_id", workerID)
+		return
+	}
+
+	worker.mu.RLock()
+	responseChan, ok := worker.PendingTasks[taskID]
+	worker.mu.RUnlock()
+
+	if !ok {
+		cs.logger.Warn("Received response for unknown task",
+			"task_id", taskID,
+			"worker_id", workerID)
+		return
+	}
+
+	// Send response to waiting channel (non-blocking)
+	select {
+	case responseChan <- response:
+		cs.logger.Debug("Routed task response to waiting client", "task_id", taskID)
+	default:
+		cs.logger.Warn("Response channel full or closed", "task_id", taskID)
 	}
 }
 

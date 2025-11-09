@@ -70,6 +70,9 @@ func main() {
 	)
 
 	// Initialize components
+	// For now, we use in-memory storage (no persistence)
+	// Future: Add support for external storage backends via environment variables
+	// Example: STORAGE_BACKEND=redis STORAGE_URL=redis://localhost:6379
 	workerRegistry := coordinator.NewWorkerRegistry()
 	sessionManager := coordinator.NewSessionManager(workerRegistry)
 	workerClient := coordinator.NewRealWorkerClient(workerRegistry, sessionManager, logger)
@@ -165,13 +168,29 @@ func main() {
 
 	logger.Info("Shutting down gracefully")
 
-	// Stop gRPC server
-	logger.Info("Stopping gRPC server")
-	grpcServer.GracefulStop()
+	// Cancel context to stop all background goroutines
+	cancel()
 
-	// Allow sessions to drain
-	if count := sessionManager.SessionCount(); count > 0 {
-		logger.Info("Waiting for active sessions", "count", count)
+	// Stop gRPC server with timeout
+	logger.Info("Stopping gRPC server")
+
+	// For long-running bidirectional streams, GracefulStop will wait forever
+	// Use a short timeout and force stop if needed
+	const shutdownTimeout = 2 * time.Second
+	shutdownComplete := make(chan struct{})
+	go func() {
+		grpcServer.GracefulStop()
+		close(shutdownComplete)
+	}()
+
+	// Wait for graceful shutdown with timeout
+	select {
+	case <-shutdownComplete:
+		logger.Info("gRPC server stopped gracefully")
+	case <-time.After(shutdownTimeout):
+		logger.Warn("Graceful shutdown timeout, forcing stop")
+		grpcServer.Stop()
+		<-shutdownComplete // Wait for GracefulStop to return after Stop()
 	}
 
 	logger.Info("Coordinator shutdown complete")

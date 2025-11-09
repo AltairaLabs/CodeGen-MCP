@@ -34,6 +34,11 @@ func NewWorkerServer(workerID string, maxSessions int32, baseWorkspace string) *
 	}
 }
 
+// GetTaskExecutor returns the task executor for this worker
+func (ws *WorkerServer) GetTaskExecutor() *TaskExecutor {
+	return ws.taskExecutor
+}
+
 // CreateSession implements SessionManagement.CreateSession
 //
 //nolint:lll // Protobuf types create inherently long function signatures

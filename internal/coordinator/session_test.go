@@ -98,3 +98,21 @@ func TestSessionManager_SessionCount(t *testing.T) {
 		t.Errorf("Expected 2 sessions, got %d", sm.SessionCount())
 	}
 }
+
+func TestSessionManager_CreateSessionNoWorkersAvailable(t *testing.T) {
+	registry := coordinator.NewWorkerRegistry()
+	sm := coordinator.NewSessionManager(registry)
+
+	// Don't register any workers
+
+	// Create session - should succeed but no worker assigned
+	session := sm.CreateSession(context.Background(), "test-session-1", "user1", "workspace1")
+
+	if session.WorkerID != "" {
+		t.Errorf("Expected empty worker ID, got %s", session.WorkerID)
+	}
+
+	if session.WorkerSessionID != "" {
+		t.Errorf("Expected empty worker session ID, got %s", session.WorkerSessionID)
+	}
+}

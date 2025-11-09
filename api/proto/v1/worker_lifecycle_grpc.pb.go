@@ -22,6 +22,7 @@ const (
 	WorkerLifecycle_RegisterWorker_FullMethodName   = "/codegen.v1.WorkerLifecycle/RegisterWorker"
 	WorkerLifecycle_Heartbeat_FullMethodName        = "/codegen.v1.WorkerLifecycle/Heartbeat"
 	WorkerLifecycle_DeregisterWorker_FullMethodName = "/codegen.v1.WorkerLifecycle/DeregisterWorker"
+	WorkerLifecycle_TaskStream_FullMethodName       = "/codegen.v1.WorkerLifecycle/TaskStream"
 )
 
 // WorkerLifecycleClient is the client API for WorkerLifecycle service.
@@ -36,6 +37,9 @@ type WorkerLifecycleClient interface {
 	Heartbeat(ctx context.Context, in *HeartbeatRequest, opts ...grpc.CallOption) (*HeartbeatResponse, error)
 	// Worker gracefully deregisters before shutdown
 	DeregisterWorker(ctx context.Context, in *DeregisterRequest, opts ...grpc.CallOption) (*DeregisterResponse, error)
+	// Worker opens a bidirectional stream for receiving task assignments from coordinator
+	// Coordinator sends TaskAssignment messages, worker sends TaskResponse messages back
+	TaskStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TaskStreamMessage, TaskStreamMessage], error)
 }
 
 type workerLifecycleClient struct {
@@ -76,6 +80,19 @@ func (c *workerLifecycleClient) DeregisterWorker(ctx context.Context, in *Deregi
 	return out, nil
 }
 
+func (c *workerLifecycleClient) TaskStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TaskStreamMessage, TaskStreamMessage], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &WorkerLifecycle_ServiceDesc.Streams[0], WorkerLifecycle_TaskStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TaskStreamMessage, TaskStreamMessage]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerLifecycle_TaskStreamClient = grpc.BidiStreamingClient[TaskStreamMessage, TaskStreamMessage]
+
 // WorkerLifecycleServer is the server API for WorkerLifecycle service.
 // All implementations must embed UnimplementedWorkerLifecycleServer
 // for forward compatibility.
@@ -88,6 +105,9 @@ type WorkerLifecycleServer interface {
 	Heartbeat(context.Context, *HeartbeatRequest) (*HeartbeatResponse, error)
 	// Worker gracefully deregisters before shutdown
 	DeregisterWorker(context.Context, *DeregisterRequest) (*DeregisterResponse, error)
+	// Worker opens a bidirectional stream for receiving task assignments from coordinator
+	// Coordinator sends TaskAssignment messages, worker sends TaskResponse messages back
+	TaskStream(grpc.BidiStreamingServer[TaskStreamMessage, TaskStreamMessage]) error
 	mustEmbedUnimplementedWorkerLifecycleServer()
 }
 
@@ -106,6 +126,9 @@ func (UnimplementedWorkerLifecycleServer) Heartbeat(context.Context, *HeartbeatR
 }
 func (UnimplementedWorkerLifecycleServer) DeregisterWorker(context.Context, *DeregisterRequest) (*DeregisterResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeregisterWorker not implemented")
+}
+func (UnimplementedWorkerLifecycleServer) TaskStream(grpc.BidiStreamingServer[TaskStreamMessage, TaskStreamMessage]) error {
+	return status.Errorf(codes.Unimplemented, "method TaskStream not implemented")
 }
 func (UnimplementedWorkerLifecycleServer) mustEmbedUnimplementedWorkerLifecycleServer() {}
 func (UnimplementedWorkerLifecycleServer) testEmbeddedByValue()                         {}
@@ -182,6 +205,13 @@ func _WorkerLifecycle_DeregisterWorker_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _WorkerLifecycle_TaskStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(WorkerLifecycleServer).TaskStream(&grpc.GenericServerStream[TaskStreamMessage, TaskStreamMessage]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type WorkerLifecycle_TaskStreamServer = grpc.BidiStreamingServer[TaskStreamMessage, TaskStreamMessage]
+
 // WorkerLifecycle_ServiceDesc is the grpc.ServiceDesc for WorkerLifecycle service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -202,6 +232,13 @@ var WorkerLifecycle_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WorkerLifecycle_DeregisterWorker_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "TaskStream",
+			Handler:       _WorkerLifecycle_TaskStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+	},
 	Metadata: "api/proto/v1/worker_lifecycle.proto",
 }

@@ -3,7 +3,6 @@ package coordinator
 import (
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"time"
 
@@ -75,7 +74,7 @@ func NewRealWorkerClient(
 	}
 }
 
-// ExecuteTask routes a task to the appropriate worker via gRPC
+// ExecuteTask routes a task to the appropriate worker via bidirectional stream
 func (r *RealWorkerClient) ExecuteTask(
 	ctx context.Context,
 	workspaceID string,
@@ -87,29 +86,96 @@ func (r *RealWorkerClient) ExecuteTask(
 		return nil, err
 	}
 
+	// Check session state - if still creating, task will wait on worker side
+	// If failed, return error immediately
+	switch session.State {
+	case SessionStateFailed:
+		return nil, fmt.Errorf("session creation failed: %s", session.StateMessage)
+	case SessionStateTerminating:
+		return nil, fmt.Errorf("session is terminating")
+	case SessionStateCreating, SessionStateReady:
+		// Continue - worker will handle the wait if needed
+	default:
+		return nil, fmt.Errorf("session in unknown state: %s", session.State)
+	}
+
 	// Convert TaskArgs to protobuf format
 	protoArgs := make(map[string]string)
 	for k, v := range args {
 		protoArgs[k] = fmt.Sprintf("%v", v)
 	}
 
-	// Execute task on worker
+	// Generate unique task ID
+	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
+
+	// Add timeout to prevent hanging forever if worker disconnects
+	taskCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	// Send task to worker over stream
 	startTime := time.Now()
-	stream, err := r.startTask(ctx, worker, session, toolName, workspaceID, protoArgs)
+	responseChan, err := r.sendTaskToWorker(taskCtx, worker, session, taskID, toolName, workspaceID, protoArgs)
 	if err != nil {
 		return nil, err
 	}
 
-	// Process streaming responses
-	finalResult, taskError, err := r.processTaskStream(ctx, stream, worker.WorkerID)
-	if err != nil {
-		return nil, err
+	// Wait for responses from worker
+	var finalResult *protov1.TaskStreamResult
+	var taskError *protov1.TaskStreamError
+
+	for {
+		select {
+		case <-taskCtx.Done():
+			// Cleanup pending task
+			worker.mu.Lock()
+			delete(worker.PendingTasks, taskID)
+			worker.mu.Unlock()
+			return nil, fmt.Errorf("task timeout: %w", taskCtx.Err())
+
+		case response, ok := <-responseChan:
+			if !ok {
+				// Channel closed, task failed
+				return nil, fmt.Errorf("task response channel closed")
+			}
+
+			// Handle different response types
+			switch payload := response.Payload.(type) {
+			case *protov1.TaskStreamResponse_Result:
+				finalResult = payload.Result
+				// Task complete, cleanup and return
+				worker.mu.Lock()
+				delete(worker.PendingTasks, taskID)
+				worker.mu.Unlock()
+				goto buildResult
+
+			case *protov1.TaskStreamResponse_Error:
+				taskError = payload.Error
+				// Task errored, cleanup and return
+				worker.mu.Lock()
+				delete(worker.PendingTasks, taskID)
+				worker.mu.Unlock()
+				goto buildResult
+
+			case *protov1.TaskStreamResponse_Log:
+				r.logger.DebugContext(ctx, "Worker log",
+					"level", payload.Log.Level,
+					"message", payload.Log.Message,
+				)
+
+			case *protov1.TaskStreamResponse_Progress:
+				r.logger.DebugContext(ctx, "Worker progress",
+					"stage", payload.Progress.Stage,
+					"percent", payload.Progress.PercentComplete,
+				)
+			}
+		}
 	}
 
+buildResult:
 	duration := time.Since(startTime)
 
 	// Build and return result
-	result, err := r.buildTaskResult(finalResult, taskError, duration)
+	result, err := r.buildTaskResultFromStream(finalResult, taskError, duration)
 	if err != nil {
 		return nil, err
 	}
@@ -127,7 +193,7 @@ func (r *RealWorkerClient) ExecuteTask(
 
 // getSessionAndWorker retrieves the session and its assigned worker
 func (r *RealWorkerClient) getSessionAndWorker(ctx context.Context) (*Session, *RegisteredWorker, error) {
-	sessionID, ok := ctx.Value("session_id").(string)
+	sessionID, ok := ctx.Value(sessionIDKey{}).(string)
 	if !ok {
 		sessionID = "default-session"
 	}
@@ -149,72 +215,93 @@ func (r *RealWorkerClient) getSessionAndWorker(ctx context.Context) (*Session, *
 	return session, worker, nil
 }
 
-// startTask initiates task execution on a worker
-func (r *RealWorkerClient) startTask(
+// sendTaskToWorker sends a task assignment to worker over the bidirectional stream
+func (r *RealWorkerClient) sendTaskToWorker(
 	ctx context.Context,
 	worker *RegisteredWorker,
 	session *Session,
+	taskID string,
 	toolName string,
 	workspaceID string,
 	protoArgs map[string]string,
-) (protov1.TaskExecution_ExecuteTaskClient, error) {
-	stream, err := worker.Client.TaskExec.ExecuteTask(ctx, &protov1.TaskRequest{
-		SessionId: session.WorkerSessionID,
-		ToolName:  toolName,
-		Arguments: protoArgs,
-		Context: &protov1.TaskContext{
-			WorkspaceId: workspaceID,
-			UserId:      session.UserID,
-		},
-	})
+) (chan *protov1.TaskStreamResponse, error) {
+	worker.mu.Lock()
+	defer worker.mu.Unlock()
 
-	if err != nil {
-		r.logger.ErrorContext(ctx, "Failed to start task on worker",
-			"worker_id", worker.WorkerID,
-			"session_id", session.ID,
-			"tool_name", toolName,
-			"error", err,
-		)
-		return nil, fmt.Errorf("worker task execution failed: %w", err)
+	// Check if worker has an active task stream
+	if worker.TaskStream == nil {
+		return nil, fmt.Errorf("worker %s has no active task stream", worker.WorkerID)
 	}
 
-	return stream, nil
+	// Create channel for receiving responses
+	responseChan := make(chan *protov1.TaskStreamResponse, 10)
+	worker.PendingTasks[taskID] = responseChan
+
+	// Send task assignment
+	assignment := &protov1.TaskStreamMessage{
+		Message: &protov1.TaskStreamMessage_Assignment{
+			Assignment: &protov1.TaskAssignment{
+				TaskId:    taskID,
+				SessionId: session.WorkerSessionID,
+				ToolName:  toolName,
+				Arguments: protoArgs,
+				Context: &protov1.TaskContext{
+					WorkspaceId: workspaceID,
+					UserId:      session.UserID,
+				},
+			},
+		},
+	}
+
+	err := worker.TaskStream.Send(assignment)
+	if err != nil {
+		delete(worker.PendingTasks, taskID)
+		close(responseChan)
+		return nil, fmt.Errorf("failed to send task to worker: %w", err)
+	}
+
+	r.logger.InfoContext(ctx, "Sent task to worker via stream",
+		"worker_id", worker.WorkerID,
+		"task_id", taskID,
+		"tool_name", toolName,
+	)
+
+	return responseChan, nil
 }
 
-// processTaskStream processes streaming responses from worker
-func (r *RealWorkerClient) processTaskStream(
-	ctx context.Context,
-	stream protov1.TaskExecution_ExecuteTaskClient,
-	workerID string,
-) (*protov1.TaskResult, *protov1.TaskError, error) {
-	var finalResult *protov1.TaskResult
-	var taskError *protov1.TaskError
+// buildTaskResultFromStream builds a TaskResult from stream response messages
+func (r *RealWorkerClient) buildTaskResultFromStream(
+	finalResult *protov1.TaskStreamResult,
+	taskError *protov1.TaskStreamError,
+	duration time.Duration,
+) (*TaskResult, error) {
+	if taskError != nil {
+		return nil, fmt.Errorf("task failed: %s - %s", taskError.Code, taskError.Message)
+	}
 
-	for {
-		resp, err := stream.Recv()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			r.logger.ErrorContext(ctx, "Error receiving task response",
-				"worker_id", workerID,
-				"error", err,
-			)
-			return nil, nil, fmt.Errorf("stream error: %w", err)
-		}
+	if finalResult == nil {
+		return nil, fmt.Errorf("no result received from worker")
+	}
 
-		r.handleTaskResponse(ctx, resp)
-
-		// Extract result/error from response
-		switch payload := resp.Payload.(type) {
-		case *protov1.TaskResponse_Result:
-			finalResult = payload.Result
-		case *protov1.TaskResponse_Error:
-			taskError = payload.Error
+	// Extract output from the outputs map
+	output := ""
+	if finalResult.Outputs != nil {
+		if val, ok := finalResult.Outputs["output"]; ok {
+			output = val
 		}
 	}
 
-	return finalResult, taskError, nil
+	exitCode := 0
+	if finalResult.Metadata != nil {
+		exitCode = int(finalResult.Metadata.ExitCode)
+	}
+
+	return &TaskResult{
+		Success:  finalResult.Status == protov1.TaskStreamResult_STATUS_SUCCESS,
+		Output:   output,
+		ExitCode: exitCode,
+		Duration: duration,
+	}, nil
 }
 
 // handleTaskResponse processes individual task response messages
