@@ -314,3 +314,95 @@ func (s *InMemoryTaskQueueStorage) GetQueuedTasksForSession(
 
 	return result, nil
 }
+
+// GetTasksReadyForRetry retrieves tasks that are ready to be retried
+func (s *InMemoryTaskQueueStorage) GetTasksReadyForRetry(ctx context.Context, limit int) ([]*storage.QueuedTask, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	now := time.Now()
+	result := make([]*storage.QueuedTask, 0)
+
+	// Scan all tasks for retry-ready tasks
+	for _, task := range s.tasks {
+		if task.State == storage.TaskStateRetrying && task.NextRetryAt != nil && !task.NextRetryAt.After(now) {
+			// Return a copy to avoid external mutations
+			taskCopy := *task
+			result = append(result, &taskCopy)
+
+			// Check limit
+			if limit > 0 && len(result) >= limit {
+				break
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// UpdateTaskForRetry updates a task to prepare it for retry
+func (s *InMemoryTaskQueueStorage) UpdateTaskForRetry(ctx context.Context, taskID string, nextRetryAt time.Time, errorMsg string) error {
+	if taskID == "" {
+		return errTaskIDEmpty
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, exists := s.tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+
+	// Check if max retries exceeded
+	if task.RetryCount >= task.MaxRetries {
+		return fmt.Errorf("max retries (%d) exceeded for task %s", task.MaxRetries, taskID)
+	}
+
+	// Update retry fields
+	task.RetryCount++
+	task.NextRetryAt = &nextRetryAt
+	task.State = storage.TaskStateRetrying
+	task.Error = errorMsg
+
+	return nil
+}
+
+// RequeueTaskForRetry moves a task from retrying state back to queued
+func (s *InMemoryTaskQueueStorage) RequeueTaskForRetry(ctx context.Context, taskID string) error {
+	if taskID == "" {
+		return errTaskIDEmpty
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	task, exists := s.tasks[taskID]
+	if !exists {
+		return fmt.Errorf("task not found: %s", taskID)
+	}
+
+	if task.State != storage.TaskStateRetrying {
+		return fmt.Errorf("task %s is not in retrying state (current: %s)", taskID, task.State)
+	}
+
+	// Move back to queued state
+	task.State = storage.TaskStateQueued
+	task.NextRetryAt = nil
+
+	// Add task back to session queue if not already present
+	sessionQueue := s.sessionQueues[task.SessionID]
+	taskExists := false
+	for _, id := range sessionQueue {
+		if id == taskID {
+			taskExists = true
+			break
+		}
+	}
+
+	if !taskExists {
+		s.sessionQueues[task.SessionID] = append(s.sessionQueues[task.SessionID], taskID)
+	}
+
+	return nil
+}

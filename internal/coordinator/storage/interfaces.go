@@ -83,6 +83,21 @@ type TaskQueueStorage interface {
 	// GetQueuedTasksForSession retrieves all queued tasks for a session
 	// Useful for debugging and observability
 	GetQueuedTasksForSession(ctx context.Context, sessionID string) ([]*QueuedTask, error)
+
+	// GetTasksReadyForRetry retrieves tasks that are ready to be retried
+	// Returns tasks where NextRetryAt <= now and State == TaskStateRetrying
+	// limit parameter controls maximum number of tasks to return (0 = no limit)
+	GetTasksReadyForRetry(ctx context.Context, limit int) ([]*QueuedTask, error)
+
+	// UpdateTaskForRetry updates a task to prepare it for retry
+	// Increments RetryCount, sets NextRetryAt, sets State to TaskStateRetrying
+	// Returns error if task not found or max retries exceeded
+	UpdateTaskForRetry(ctx context.Context, taskID string, nextRetryAt time.Time, errorMsg string) error
+
+	// RequeueTaskForRetry moves a task from retrying state back to queued
+	// Used by retry scheduler when retry time arrives
+	// Returns error if task not found or not in retrying state
+	RequeueTaskForRetry(ctx context.Context, taskID string) error
 }
 
 // NOTE: SessionStateStorage interface is defined in coordinator/session.go
