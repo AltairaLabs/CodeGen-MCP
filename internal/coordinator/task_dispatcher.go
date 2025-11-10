@@ -3,18 +3,20 @@ package coordinator
 import (
 	"context"
 	"fmt"
+
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
 )
 
 // TaskDispatcher handles task dispatch with retry logic
 // This will be used by the task queue system (Phase 5) when dispatching tasks
 type TaskDispatcher struct {
-	storage      TaskRetryStorage
+	storage      storage.TaskQueueStorage
 	workerClient WorkerClient
 	retryPolicy  *RetryPolicy
 }
 
 // NewTaskDispatcher creates a new task dispatcher with retry support
-func NewTaskDispatcher(storage TaskRetryStorage, workerClient WorkerClient, policy *RetryPolicy) *TaskDispatcher {
+func NewTaskDispatcher(storage storage.TaskQueueStorage, workerClient WorkerClient, policy *RetryPolicy) *TaskDispatcher {
 	if policy == nil {
 		defaultPolicy := DefaultRetryPolicy()
 		policy = &defaultPolicy
@@ -31,7 +33,7 @@ func NewTaskDispatcher(storage TaskRetryStorage, workerClient WorkerClient, poli
 // Returns true if task was scheduled for retry, false if task failed permanently
 func (td *TaskDispatcher) HandleTaskFailure(
 	ctx context.Context,
-	task *QueuedTask,
+	task *storage.QueuedTask,
 	taskErr error,
 ) (bool, error) {
 	// Check if error is retryable

@@ -81,7 +81,7 @@ func (cs *CoordinatorServer) RegisterWorker(
 		WorkerID:              req.WorkerId,
 		SessionID:             sessionID,
 		TaskStream:            nil, // Will be set when worker calls TaskStream RPC
-		PendingTasks:          make(map[string]chan *protov1.TaskStreamResponse),
+		PendingTasks:          make(map[string]*PendingTask),
 		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
 		Capabilities:          req.Capabilities,
 		Limits:                req.Limits,
@@ -514,7 +514,7 @@ func (cs *CoordinatorServer) handleTaskStreamResponse(ctx context.Context, worke
 	}
 
 	worker.mu.RLock()
-	responseChan, ok := worker.PendingTasks[taskID]
+	pendingTask, ok := worker.PendingTasks[taskID]
 	worker.mu.RUnlock()
 
 	if !ok {
@@ -526,7 +526,7 @@ func (cs *CoordinatorServer) handleTaskStreamResponse(ctx context.Context, worke
 
 	// Send response to waiting channel (non-blocking)
 	select {
-	case responseChan <- response:
+	case pendingTask.ResponseChan <- response:
 		cs.logger.Debug("Routed task response to waiting client", "task_id", taskID)
 	default:
 		cs.logger.Warn("Response channel full or closed", "task_id", taskID)

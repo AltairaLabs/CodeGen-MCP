@@ -14,8 +14,10 @@ Tests complete workflow using HTTP/SSE transport:
 """
 
 import asyncio
+import json
 import os
 import sys
+import time
 
 try:
     from mcp import ClientSession
@@ -24,6 +26,75 @@ except ImportError:
     print("❌ Error: MCP SDK not installed")
     print("Run: make setup-e2e-tests")
     sys.exit(1)
+
+
+async def wait_for_task_result(session: ClientSession, task_id: str, timeout: int = 30) -> str:
+    """
+    Poll for a task result until it's ready or timeout.
+    
+    Args:
+        session: The MCP client session
+        task_id: The task ID to wait for
+        timeout: Maximum time to wait in seconds
+        
+    Returns:
+        The task result output as a string
+        
+    Raises:
+        TimeoutError: If task doesn't complete within timeout
+        RuntimeError: If task fails
+    """
+    start_time = time.time()
+    poll_interval = 0.5  # Start with 500ms polling
+    max_interval = 2.0   # Max 2 seconds between polls
+    
+    while time.time() - start_time < timeout:
+        try:
+            result = await session.call_tool(
+                "task.get_result",
+                arguments={"task_id": task_id}
+            )
+            
+            result_text = result.content[0].text if result.content else ""
+            print(f"   [DEBUG] task.get_result returned: {result_text[:200]}")
+            
+            # Try to parse as JSON to check status
+            try:
+                result_data = json.loads(result_text)
+                status = result_data.get("status", "").lower()
+                
+                if status == "completed":
+                    # Task completed, but we got status JSON instead of result
+                    # This shouldn't happen with current implementation
+                    raise RuntimeError(f"Task completed but got status response: {result_text}")
+                elif status == "failed":
+                    error_msg = result_data.get("error", "Unknown error")
+                    raise RuntimeError(f"Task failed: {error_msg}")
+                elif status in ["queued", "dispatched", "running"]:
+                    # Task still processing, continue polling
+                    await asyncio.sleep(poll_interval)
+                    # Exponential backoff up to max_interval
+                    poll_interval = min(poll_interval * 1.5, max_interval)
+                    continue
+                else:
+                    # Unknown status
+                    raise RuntimeError(f"Unknown task status: {status}")
+            except json.JSONDecodeError:
+                # Not JSON, this should be the actual result
+                return result_text
+                
+        except Exception as e:
+            error_str = str(e)
+            # Check if this is a "not ready" error
+            if "not found" in error_str.lower() or "not ready" in error_str.lower():
+                await asyncio.sleep(poll_interval)
+                poll_interval = min(poll_interval * 1.5, max_interval)
+                continue
+            else:
+                # Some other error, re-raise
+                raise
+    
+    raise TimeoutError(f"Task {task_id} did not complete within {timeout} seconds")
 
 
 async def run_e2e_test():
@@ -117,11 +188,26 @@ print('Python is working!')
                         "contents": hello_code
                     }
                 )
-                write_msg = (
+                write_response = (
                     write_result.content[0].text
-                    if write_result.content else 'success'
+                    if write_result.content else '{}'
                 )
-                print(f"   ✅ File written: {write_msg}")
+                
+                # Parse task response and wait for completion
+                try:
+                    task_data = json.loads(write_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        result_text = await wait_for_task_result(
+                            session, task_id
+                        )
+                        print(f"   ✅ File written: {result_text}")
+                    else:
+                        print(f"   ✅ File written: {write_response}")
+                except json.JSONDecodeError:
+                    # Not a task response, direct result
+                    print(f"   ✅ File written: {write_response}")
                 
                 # Phase 4: Execute Python
                 print("\n🐍 Phase 4: Executing hello.py...")
@@ -131,10 +217,24 @@ print('Python is working!')
                         "file": "hello.py"
                     }
                 )
-                output = (
+                run_response = (
                     run_result.content[0].text
                     if run_result.content else ""
                 )
+                
+                # Parse task response and wait for result
+                try:
+                    task_data = json.loads(run_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        output = await wait_for_task_result(session, task_id)
+                    else:
+                        output = run_response
+                except json.JSONDecodeError:
+                    # Not a task response, direct result
+                    output = run_response
+                
                 print("   Execution output:")
                 for line in output.split('\n'):
                     if line.strip():
@@ -146,6 +246,7 @@ print('Python is working!')
                     print("   ✅ Python execution successful")
                 else:
                     print("   ❌ Output doesn't match expected")
+                    print(f"   Got: {output}")
                     sys.exit(1)
                 
                 # Phase 5: Read file back
@@ -156,15 +257,34 @@ print('Python is working!')
                         "path": "hello.py"
                     }
                 )
-                file_contents = (
+                read_response = (
                     read_result.content[0].text
                     if read_result.content else ""
                 )
+                
+                # Parse task response and wait for result
+                try:
+                    task_data = json.loads(read_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        file_contents = await wait_for_task_result(
+                            session, task_id
+                        )
+                    else:
+                        file_contents = read_response
+                except json.JSONDecodeError:
+                    file_contents = read_response
+                
+                print(f"   DEBUG: file_contents = '{file_contents}'")
+                print(f"   DEBUG: length = {len(file_contents)}")
+                
                 if "Hello from CodeGen-MCP!" in file_contents:
                     print("   ✅ File read successfully")
                     print(f"   File size: {len(file_contents)} bytes")
                 else:
                     print("   ❌ File contents don't match")
+                    print(f"   Expected 'Hello from CodeGen-MCP!' in output")
                     sys.exit(1)
                 
                 # Phase 6: List directory
@@ -175,10 +295,25 @@ print('Python is working!')
                         "path": ""
                     }
                 )
-                dir_listing = (
+                list_response = (
                     list_result.content[0].text
                     if list_result.content else ""
                 )
+                
+                # Parse task response and wait for result
+                try:
+                    task_data = json.loads(list_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        dir_listing = await wait_for_task_result(
+                            session, task_id
+                        )
+                    else:
+                        dir_listing = list_response
+                except json.JSONDecodeError:
+                    dir_listing = list_response
+                
                 if "hello.py" in dir_listing:
                     print("   ✅ Directory listing successful")
                     files = dir_listing.strip().split('\n')[:5]
@@ -196,10 +331,25 @@ print('Python is working!')
                         "packages": "requests"
                     }
                 )
-                install_output = (
+                install_response = (
                     install_result.content[0].text
                     if install_result.content else ""
                 )
+                
+                # Parse task response and wait for result
+                try:
+                    task_data = json.loads(install_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        install_output = await wait_for_task_result(
+                            session, task_id, timeout=60
+                        )
+                    else:
+                        install_output = install_response
+                except json.JSONDecodeError:
+                    install_output = install_response
+                
                 if ("Successfully installed" in install_output or
                         "Requirement already satisfied" in install_output):
                     print("   ✅ Package installed successfully")
@@ -220,10 +370,25 @@ print(f"has get: {hasattr(requests, 'get')}")
                         "code": test_code
                     }
                 )
-                test_output = (
+                test_response = (
                     test_result.content[0].text
                     if test_result.content else ""
                 )
+                
+                # Parse task response and wait for result
+                try:
+                    task_data = json.loads(test_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        test_output = await wait_for_task_result(
+                            session, task_id
+                        )
+                    else:
+                        test_output = test_response
+                except json.JSONDecodeError:
+                    test_output = test_response
+                
                 print("   Test output:")
                 for line in test_output.split('\n'):
                     if line.strip():
@@ -244,14 +409,31 @@ print(f"has get: {hasattr(requests, 'get')}")
                         "message": "End-to-end test complete!"
                     }
                 )
-                echo_output = (
+                echo_response = (
                     echo_result.content[0].text
                     if echo_result.content else ""
                 )
+                
+                # Parse task response and wait for result
+                try:
+                    task_data = json.loads(echo_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        echo_output = await wait_for_task_result(
+                            session, task_id
+                        )
+                    else:
+                        echo_output = echo_response
+                except json.JSONDecodeError:
+                    echo_output = echo_response
+                
                 if "End-to-end test complete!" in echo_output:
                     print(f"   ✅ Echo: {echo_output.strip()}")
                 else:
                     print("   ❌ Echo failed")
+                    print("   Expected 'End-to-end test complete!' in output")
+                    print(f"   Got: {echo_output}")
                     sys.exit(1)
                 
                 print("\n" + "=" * 70)

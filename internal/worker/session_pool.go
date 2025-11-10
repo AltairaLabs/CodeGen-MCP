@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -107,6 +108,13 @@ func (sp *SessionPool) CreateSessionWithID(ctx context.Context, sessionID, works
 	if err := os.MkdirAll(workspacePath, defaultWorkspaceDirPerm); err != nil { // NOSONAR - workspace directories need 0755 for proper file operations
 		return fmt.Errorf("failed to create workspace: %w", err)
 	}
+
+	// Debug logging
+	slog.Debug("created session workspace",
+		"session_id", sessionID,
+		"workspace_id", workspaceID,
+		"workspace_path", workspacePath,
+		"base_workspace", sp.baseWorkspace)
 
 	// Create session config
 	config := &protov1.SessionConfig{

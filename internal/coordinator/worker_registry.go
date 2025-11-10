@@ -33,12 +33,18 @@ type WorkerRegistry struct {
 	storage WorkerRegistryStorage // Optional storage backend for metadata persistence
 }
 
+// PendingTask tracks a task awaiting response with its associated tool name
+type PendingTask struct {
+	ResponseChan chan *protov1.TaskStreamResponse
+	ToolName     string
+}
+
 // RegisteredWorker represents a worker registered with the coordinator
 type RegisteredWorker struct {
 	WorkerID              string
 	SessionID             string                                         // Worker's registration session ID
 	TaskStream            protov1.WorkerLifecycle_TaskStreamServer       // Bidirectional stream for tasks
-	PendingTasks          map[string]chan *protov1.TaskStreamResponse    // Channels waiting for task responses
+	PendingTasks          map[string]*PendingTask                        // Tasks awaiting responses with tool context
 	PendingSessionCreates map[string]chan *protov1.SessionCreateResponse // Channels waiting for session create responses
 	Capabilities          *protov1.WorkerCapabilities
 	Limits                *protov1.ResourceLimits

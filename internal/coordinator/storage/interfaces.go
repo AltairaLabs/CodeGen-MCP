@@ -3,8 +3,6 @@ package storage
 import (
 	"context"
 	"time"
-
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
 )
 
 // TaskState represents the lifecycle state of a queued task
@@ -25,23 +23,27 @@ const (
 	TaskStateRetrying TaskState = "retrying"
 )
 
+// TaskArgs represents tool arguments (breaking import cycle with coordinator package)
+type TaskArgs map[string]interface{}
+
 // QueuedTask represents a task in the queue with retry and sequencing support
 type QueuedTask struct {
-	ID             string               // Unique task ID
-	SessionID      string               // Target session ID
-	ConversationID string               // External conversation ID (future use)
-	ToolName       string               // Tool to execute
-	Args           coordinator.TaskArgs // Tool arguments
-	Sequence       uint64               // Monotonic sequence number per session
-	State          TaskState            // Current state
-	RetryCount     int                  // Number of retry attempts
-	MaxRetries     int                  // Maximum retry attempts
-	CreatedAt      time.Time            // When task was created
-	DispatchedAt   *time.Time           // When task was sent to worker (nil if not dispatched)
-	CompletedAt    *time.Time           // When task completed (nil if not completed)
-	Timeout        time.Duration        // Max time to wait in queue
-	Error          string               // Last error message
-	NextRetryAt    *time.Time           // When to retry next (nil if not retrying)
+	ID             string        // Unique task ID
+	SessionID      string        // Target session ID
+	ConversationID string        // External conversation ID (future use)
+	ToolName       string        // Tool to execute
+	Args           TaskArgs      // Tool arguments (legacy, kept for backward compatibility)
+	TypedRequest   []byte        // Serialized protobuf ToolRequest (preferred, type-safe)
+	Sequence       uint64        // Monotonic sequence number per session
+	State          TaskState     // Current state
+	RetryCount     int           // Number of retry attempts
+	MaxRetries     int           // Maximum retry attempts
+	CreatedAt      time.Time     // When task was created
+	DispatchedAt   *time.Time    // When task was sent to worker (nil if not dispatched)
+	CompletedAt    *time.Time    // When task completed (nil if not completed)
+	Timeout        time.Duration // Max time to wait in queue
+	Error          string        // Last error message
+	NextRetryAt    *time.Time    // When to retry next (nil if not retrying)
 }
 
 // QueueStats provides statistics about the task queue

@@ -195,7 +195,126 @@ buildResult:
 	duration := time.Since(startTime)
 
 	// Build and return result
-	result, err := r.buildTaskResultFromStream(finalResult, taskError, duration)
+	result, err := r.buildTaskResultFromStream(finalResult, taskError, duration, toolName)
+	if err != nil {
+		return nil, err
+	}
+
+	r.logger.InfoContext(ctx, "Task executed on worker",
+		"worker_id", worker.WorkerID,
+		"session_id", session.ID,
+		"tool_name", toolName,
+		"success", result.Success,
+		"duration_ms", duration.Milliseconds(),
+	)
+
+	return result, nil
+}
+
+// ExecuteTypedTask sends a typed task to a worker and returns the result
+func (r *RealWorkerClient) ExecuteTypedTask(
+	ctx context.Context,
+	workspaceID string,
+	request *protov1.ToolRequest,
+) (*TaskResult, error) {
+	session, worker, err := r.getSessionAndWorker(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Check session state
+	switch session.State {
+	case SessionStateFailed:
+		return nil, fmt.Errorf("session creation failed: %s", session.StateMessage)
+	case SessionStateTerminating:
+		return nil, fmt.Errorf("session is terminating")
+	case SessionStateCreating, SessionStateReady:
+		// Continue
+	default:
+		return nil, fmt.Errorf("session in unknown state: %s", session.State)
+	}
+
+	// Generate unique task ID
+	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
+
+	// Get next sequence number
+	sequence := r.sessionManager.GetNextSequence(ctx, session.ID)
+
+	// Add timeout
+	taskCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	// Extract tool name for logging
+	toolName := getToolNameFromTypedRequest(request)
+
+	// Send typed task to worker
+	startTime := time.Now()
+	responseChan, err := r.sendTypedTaskToWorker(taskCtx, worker, session, taskID, request, workspaceID, sequence)
+	if err != nil {
+		return nil, err
+	}
+
+	// Wait for responses
+	var finalResult *protov1.TaskStreamResult
+	var taskError *protov1.TaskStreamError
+
+	for {
+		select {
+		case <-taskCtx.Done():
+			worker.mu.Lock()
+			delete(worker.PendingTasks, taskID)
+			worker.mu.Unlock()
+			return nil, fmt.Errorf("task timeout: %w", taskCtx.Err())
+
+		case response, ok := <-responseChan:
+			if !ok {
+				return nil, fmt.Errorf("task response channel closed")
+			}
+
+			switch payload := response.Payload.(type) {
+			case *protov1.TaskStreamResponse_Result:
+				finalResult = payload.Result
+
+				// Sync session metadata
+				if finalResult.SessionMetadata != nil && len(finalResult.SessionMetadata) > 0 {
+					if err := r.sessionManager.storage.SetSessionMetadata(ctx, session.ID, finalResult.SessionMetadata); err != nil {
+						r.logger.WarnContext(ctx, "Failed to sync session metadata from worker",
+							"session_id", session.ID,
+							"error", err,
+						)
+					}
+				}
+
+				// Task complete, break loop
+				goto taskComplete
+
+			case *protov1.TaskStreamResponse_Error:
+				taskError = payload.Error
+				goto taskComplete
+
+			case *protov1.TaskStreamResponse_Progress:
+				// Just log progress, continue waiting
+				r.logger.DebugContext(ctx, "Task progress",
+					"task_id", taskID,
+					"percent", payload.Progress.PercentComplete,
+					"stage", payload.Progress.Stage,
+				)
+
+			case *protov1.TaskStreamResponse_Log:
+				// Log from task execution
+				r.logger.DebugContext(ctx, "Task log",
+					"task_id", taskID,
+					"level", payload.Log.Level,
+					"message", payload.Log.Message,
+				)
+			}
+		}
+	}
+
+taskComplete:
+	duration := time.Since(startTime)
+
+	result, err := r.buildTaskResultFromStream(finalResult, taskError, duration, toolName)
 	if err != nil {
 		return nil, err
 	}
@@ -254,23 +373,56 @@ func (r *RealWorkerClient) sendTaskToWorker(
 		return nil, fmt.Errorf("worker %s has no active task stream", worker.WorkerID)
 	}
 
+	// Create channel for receiving responses and track with tool name
+	responseChan := make(chan *protov1.TaskStreamResponse, 10)
+	worker.PendingTasks[taskID] = &PendingTask{
+		ResponseChan: responseChan,
+		ToolName:     toolName,
+	}
+
+	// DEPRECATED: This method should not be used anymore - use sendTypedTaskToWorker instead
+	return nil, fmt.Errorf("sendTaskToWorker is deprecated, use ExecuteTypedTask instead")
+}
+
+// sendTypedTaskToWorker sends a typed task assignment to worker over the bidirectional stream
+func (r *RealWorkerClient) sendTypedTaskToWorker(
+	ctx context.Context,
+	worker *RegisteredWorker,
+	session *Session,
+	taskID string,
+	request *protov1.ToolRequest,
+	workspaceID string,
+	sequence uint64,
+) (chan *protov1.TaskStreamResponse, error) {
+	worker.mu.Lock()
+	defer worker.mu.Unlock()
+
+	if worker.TaskStream == nil {
+		return nil, fmt.Errorf("worker %s has no active task stream", worker.WorkerID)
+	}
+
+	// Extract tool name for tracking
+	toolName := getToolNameFromTypedRequest(request)
+
 	// Create channel for receiving responses
 	responseChan := make(chan *protov1.TaskStreamResponse, 10)
-	worker.PendingTasks[taskID] = responseChan
+	worker.PendingTasks[taskID] = &PendingTask{
+		ResponseChan: responseChan,
+		ToolName:     toolName,
+	}
 
-	// Send task assignment
+	// Send task assignment with typed request
 	assignment := &protov1.TaskStreamMessage{
 		Message: &protov1.TaskStreamMessage_Assignment{
 			Assignment: &protov1.TaskAssignment{
 				TaskId:    taskID,
 				SessionId: session.WorkerSessionID,
-				ToolName:  toolName,
-				Arguments: protoArgs,
+				Request:   request,
 				Context: &protov1.TaskContext{
 					WorkspaceId: workspaceID,
 					UserId:      session.UserID,
 				},
-				Sequence: sequence, // Monotonic sequence number for deduplication
+				Sequence: sequence,
 			},
 		},
 	}
@@ -282,7 +434,7 @@ func (r *RealWorkerClient) sendTaskToWorker(
 		return nil, fmt.Errorf("failed to send task to worker: %w", err)
 	}
 
-	r.logger.InfoContext(ctx, "Sent task to worker via stream",
+	r.logger.InfoContext(ctx, "Sent typed task to worker via stream",
 		"worker_id", worker.WorkerID,
 		"task_id", taskID,
 		"tool_name", toolName,
@@ -291,11 +443,33 @@ func (r *RealWorkerClient) sendTaskToWorker(
 	return responseChan, nil
 }
 
+// getToolNameFromTypedRequest extracts the tool name from a ToolRequest
+func getToolNameFromTypedRequest(request *protov1.ToolRequest) string {
+	switch request.Request.(type) {
+	case *protov1.ToolRequest_Echo:
+		return "echo"
+	case *protov1.ToolRequest_FsRead:
+		return "fs.read"
+	case *protov1.ToolRequest_FsWrite:
+		return "fs.write"
+	case *protov1.ToolRequest_FsList:
+		return "fs.list"
+	case *protov1.ToolRequest_RunPython:
+		return "run.python"
+	case *protov1.ToolRequest_PkgInstall:
+		return "pkg.install"
+	default:
+		return "unknown"
+	}
+}
+
 // buildTaskResultFromStream builds a TaskResult from stream response messages
+// Uses the tool-specific parser to extract output in the correct format
 func (r *RealWorkerClient) buildTaskResultFromStream(
 	finalResult *protov1.TaskStreamResult,
 	taskError *protov1.TaskStreamError,
 	duration time.Duration,
+	toolName string,
 ) (*TaskResult, error) {
 	if taskError != nil {
 		return nil, fmt.Errorf("task failed: %s - %s", taskError.Code, taskError.Message)
@@ -305,12 +479,17 @@ func (r *RealWorkerClient) buildTaskResultFromStream(
 		return nil, fmt.Errorf("no result received from worker")
 	}
 
-	// Extract output from the outputs map
-	output := ""
-	if finalResult.Outputs != nil {
-		if val, ok := finalResult.Outputs["output"]; ok {
-			output = val
-		}
+	// Get the parser for this tool
+	parserRegistry := NewToolParserRegistry()
+	parser, err := parserRegistry.GetParser(toolName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get parser for tool %s: %w", toolName, err)
+	}
+
+	// Let the tool-specific parser extract the output
+	output, err := parser.ParseResult(finalResult)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse result for tool %s: %w", toolName, err)
 	}
 
 	exitCode := 0
@@ -320,57 +499,6 @@ func (r *RealWorkerClient) buildTaskResultFromStream(
 
 	return &TaskResult{
 		Success:  finalResult.Status == protov1.TaskStreamResult_STATUS_SUCCESS,
-		Output:   output,
-		ExitCode: exitCode,
-		Duration: duration,
-	}, nil
-}
-
-// handleTaskResponse processes individual task response messages
-func (r *RealWorkerClient) handleTaskResponse(ctx context.Context, resp *protov1.TaskResponse) {
-	switch payload := resp.Payload.(type) {
-	case *protov1.TaskResponse_Log:
-		r.logger.DebugContext(ctx, "Worker log",
-			"level", payload.Log.Level,
-			"message", payload.Log.Message,
-		)
-	case *protov1.TaskResponse_Progress:
-		r.logger.DebugContext(ctx, "Worker progress",
-			"percent", payload.Progress.PercentComplete,
-			"stage", payload.Progress.Stage,
-		)
-	}
-}
-
-// buildTaskResult constructs a TaskResult from protobuf response
-func (r *RealWorkerClient) buildTaskResult(
-	finalResult *protov1.TaskResult,
-	taskError *protov1.TaskError,
-	duration time.Duration,
-) (*TaskResult, error) {
-	if taskError != nil {
-		return nil, fmt.Errorf("task failed: %s - %s", taskError.Code, taskError.Message)
-	}
-
-	if finalResult == nil {
-		return nil, fmt.Errorf("no result received from worker")
-	}
-
-	// Extract output from the outputs map
-	output := ""
-	if finalResult.Outputs != nil {
-		if val, ok := finalResult.Outputs["output"]; ok {
-			output = val
-		}
-	}
-
-	exitCode := 0
-	if finalResult.Metadata != nil {
-		exitCode = int(finalResult.Metadata.ExitCode)
-	}
-
-	return &TaskResult{
-		Success:  finalResult.Status == protov1.TaskResult_STATUS_SUCCESS,
 		Output:   output,
 		ExitCode: exitCode,
 		Duration: duration,
@@ -453,5 +581,57 @@ func (m *MockWorkerClient) ExecuteTask(
 
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", toolName)
+	}
+}
+
+// ExecuteTypedTask simulates typed task execution
+func (m *MockWorkerClient) ExecuteTypedTask(
+	ctx context.Context,
+	workspaceID string,
+	request *protov1.ToolRequest,
+) (*TaskResult, error) {
+	// Check for context cancellation
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
+	// Simulate some work
+	select {
+	case <-time.After(mockDuration):
+		// Normal execution
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+
+	// Handle each tool type
+	switch req := request.Request.(type) {
+	case *protov1.ToolRequest_Echo:
+		return &TaskResult{
+			Success:  true,
+			Output:   req.Echo.Message,
+			ExitCode: 0,
+			Duration: mockDuration,
+		}, nil
+
+	case *protov1.ToolRequest_FsRead:
+		return &TaskResult{
+			Success:  true,
+			Output:   fmt.Sprintf("Content of %s in workspace %s", req.FsRead.Path, workspaceID),
+			ExitCode: 0,
+			Duration: mockDuration,
+		}, nil
+
+	case *protov1.ToolRequest_FsWrite:
+		return &TaskResult{
+			Success:  true,
+			Output:   fmt.Sprintf("Wrote %d bytes to %s", len(req.FsWrite.Contents), req.FsWrite.Path),
+			ExitCode: 0,
+			Duration: mockDuration,
+		}, nil
+
+	default:
+		return nil, fmt.Errorf("unknown tool type: %T", request.Request)
 	}
 }

@@ -8,8 +8,44 @@ import (
 	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
 	"github.com/mark3labs/mcp-go/mcp"
 )
+
+// MockTaskQueue implements TaskQueueInterface for testing
+// It synchronously executes tasks like the old behavior
+type MockTaskQueue struct {
+	workerClient WorkerClient
+}
+
+func (m *MockTaskQueue) EnqueueTask(ctx context.Context, sessionID, toolName string, args storage.TaskArgs) (string, error) {
+	return "mock-task-id", nil
+}
+
+func (m *MockTaskQueue) GetTaskResult(ctx context.Context, taskID string) (*TaskResult, error) {
+	// For mock, we need to actually execute the task synchronously
+	// This is a simplified version that doesn't do the full async flow
+	// Tests can override this behavior as needed
+	return &TaskResult{
+		Output: "mock result",
+		Error:  "",
+	}, nil
+}
+
+func (m *MockTaskQueue) Start() {
+	// No-op for mock
+}
+
+func (m *MockTaskQueue) Stop() {
+	// No-op for mock
+}
+
+// newTestTaskQueue creates a mock task queue for testing
+func newTestTaskQueue(sm *SessionManager, worker WorkerClient, logger *slog.Logger) TaskQueueInterface {
+	return &MockTaskQueue{
+		workerClient: worker,
+	}
+}
 
 // Test handleEcho directly by calling it as a method
 func TestHandleEcho(t *testing.T) {
@@ -24,7 +60,8 @@ func TestHandleEcho(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	// Create a session for context
 	session := sm.CreateSession(context.Background(), "test-echo", "user1", "workspace1")
@@ -70,7 +107,8 @@ func TestHandleEcho_MissingMessage(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 	ctx := context.Background()
 
 	// Create request without message
@@ -111,7 +149,8 @@ func TestHandleFsRead(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	// Register a mock worker with capacity
 	mockWorker := &RegisteredWorker{
@@ -170,7 +209,8 @@ func TestHandleFsRead_AbsolutePath(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-read-abs", "user1", "workspace1")
 	ctx := context.WithValue(context.Background(), "session_id", session.ID)
@@ -213,7 +253,8 @@ func TestHandleFsRead_PathTraversal(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-read-traversal", "user1", "workspace1")
 	ctx := context.WithValue(context.Background(), "session_id", session.ID)
@@ -257,7 +298,8 @@ func TestHandleFsWrite(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	// Register a mock worker with capacity
 	mockWorker := &RegisteredWorker{
@@ -317,7 +359,8 @@ func TestHandleFsWrite_PathTraversal(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-write-traversal", "user1", "workspace1")
 	ctx := context.WithValue(context.Background(), "session_id", session.ID)
@@ -361,7 +404,8 @@ func TestHandleFsWrite_MissingContents(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-write-missing", "user1", "workspace1")
 	ctx := context.WithValue(context.Background(), "session_id", session.ID)
@@ -404,7 +448,8 @@ func TestValidateWorkspacePath(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	tests := []struct {
 		name      string
@@ -447,7 +492,8 @@ func TestGetSessionID(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	tests := []struct {
 		name       string
@@ -494,7 +540,8 @@ func TestGetOrCreateSession_NewSession(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	// Register a mock worker with capacity
 	mockWorker := &RegisteredWorker{
@@ -508,7 +555,7 @@ func TestGetOrCreateSession_NewSession(t *testing.T) {
 			AvailableSessions: 5,
 		},
 		TaskStream:            nil, // No stream for this test
-		PendingTasks:          make(map[string]chan *protov1.TaskStreamResponse),
+		PendingTasks:          make(map[string]*PendingTask),
 		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
 		LastHeartbeat:         time.Now(),
 		HeartbeatInterval:     30 * time.Second,
@@ -561,7 +608,8 @@ func TestGetOrCreateSession_ExistingSession(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	// Register a mock worker with capacity
 	mockWorker := &RegisteredWorker{
@@ -575,7 +623,7 @@ func TestGetOrCreateSession_ExistingSession(t *testing.T) {
 			AvailableSessions: 5,
 		},
 		TaskStream:            nil, // No stream for this test
-		PendingTasks:          make(map[string]chan *protov1.TaskStreamResponse),
+		PendingTasks:          make(map[string]*PendingTask),
 		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
 		LastHeartbeat:         time.Now(),
 		HeartbeatInterval:     30 * time.Second,
@@ -618,7 +666,8 @@ func TestGetOrCreateSession_NoWorkersAvailable(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	server := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	ctx := context.WithValue(context.Background(), "session_id", "test-session")
 

@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+package codegen.v1;
+
+option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
+
+// ============================================================================
+// Tool Request/Response Definitions
+// Each tool has strongly-typed request and response messages
+// ============================================================================
+
+// ============================================================================
+// Echo Tool - Simple echo/ping test
+// ============================================================================
+
+message EchoRequest {
+  string message = 1;
+  map<string, string> metadata = 100;  // Optional arbitrary metadata
+}
+
+message EchoResponse {
+  string message = 1;
+  map<string, string> metadata = 100;  // Optional arbitrary metadata
+}
+
+// ============================================================================
+// Filesystem Tools - Read, write, list operations
+// ============================================================================
+
+message FsReadRequest {
+  string path = 1;  // Path to file (relative to workspace root)
+  map<string, string> metadata = 100;
+}
+
+message FsReadResponse {
+  string contents = 1;      // File contents
+  int64 size_bytes = 2;     // File size
+  string encoding = 3;      // Detected encoding (e.g., "utf-8")
+  map<string, string> metadata = 100;
+}
+
+message FsWriteRequest {
+  string path = 1;          // Path to file (relative to workspace root)
+  string contents = 2;      // Content to write
+  bool create_dirs = 3;     // Create parent directories if needed
+  map<string, string> metadata = 100;
+}
+
+message FsWriteResponse {
+  string path = 1;          // Path that was written
+  int64 bytes_written = 2;  // Number of bytes written
+  map<string, string> metadata = 100;
+}
+
+message FsListRequest {
+  string path = 1;          // Directory path (optional, defaults to root)
+  bool recursive = 2;       // List recursively
+  string pattern = 3;       // Optional glob pattern filter
+  map<string, string> metadata = 100;
+}
+
+message FsListResponse {
+  repeated FileInfo files = 1;
+  int32 total_count = 2;    // Total number of files
+  map<string, string> metadata = 100;
+}
+
+message FileInfo {
+  string path = 1;          // Relative path
+  string name = 2;          // File name
+  int64 size_bytes = 3;     // File size
+  bool is_directory = 4;    // Is this a directory?
+  int64 modified_time_ms = 5;  // Last modified time
+}
+
+// ============================================================================
+// Python Execution Tool - Run Python code or scripts
+// ============================================================================
+
+message RunPythonRequest {
+  oneof source {
+    string code = 1;        // Python code to execute
+    string file = 2;        // Path to Python file to execute
+  }
+  repeated string args = 3;       // Command-line arguments (if running file)
+  map<string, string> env_vars = 4;  // Additional environment variables
+  int32 timeout_seconds = 5;      // Execution timeout
+  map<string, string> metadata = 100;
+}
+
+message RunPythonResponse {
+  string stdout = 1;        // Standard output
+  string stderr = 2;        // Standard error
+  int32 exit_code = 3;      // Exit code
+  int64 duration_ms = 4;    // Execution duration
+  bool timed_out = 5;       // Whether execution timed out
+  map<string, string> metadata = 100;
+}
+
+// ============================================================================
+// Package Installation Tool - Install Python packages
+// ============================================================================
+
+message PkgInstallRequest {
+  repeated string packages = 1;   // Package specifiers (e.g., "requests==2.28.0")
+  bool upgrade = 2;               // Upgrade if already installed
+  string index_url = 3;           // Custom PyPI index URL
+  bool no_deps = 4;               // Don't install dependencies
+  map<string, string> metadata = 100;
+}
+
+message PkgInstallResponse {
+  repeated PackageInfo installed = 1;  // Successfully installed packages
+  repeated string failed = 2;          // Packages that failed to install
+  string output = 3;                   // Full pip output
+  int32 exit_code = 4;                 // pip exit code
+  map<string, string> metadata = 100;
+}
+
+message PackageInfo {
+  string name = 1;          // Package name
+  string version = 2;       // Installed version
+  string location = 3;      // Installation location
+}
+
+// ============================================================================
+// Tool Request/Response Unions
+// Used in TaskAssignment and TaskStreamResult
+// ============================================================================
+
+message ToolRequest {
+  oneof request {
+    EchoRequest echo = 1;
+    FsReadRequest fs_read = 2;
+    FsWriteRequest fs_write = 3;
+    FsListRequest fs_list = 4;
+    RunPythonRequest run_python = 5;
+    PkgInstallRequest pkg_install = 6;
+  }
+}
+
+message ToolResponse {
+  oneof response {
+    EchoResponse echo = 1;
+    FsReadResponse fs_read = 2;
+    FsWriteResponse fs_write = 3;
+    FsListResponse fs_list = 4;
+    RunPythonResponse run_python = 5;
+    PkgInstallResponse pkg_install = 6;
+  }
+}

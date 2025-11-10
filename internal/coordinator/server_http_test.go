@@ -24,7 +24,8 @@ func TestHandleFsWrite_WithHTTPSession(t *testing.T) {
 		Version: "1.0.0",
 	}
 
-	mcpServer := NewMCPServer(cfg, sm, worker, audit)
+	tq := newTestTaskQueue(sm, worker, logger)
+	mcpServer := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	// Create session like the session manager would
 	_ = sm.CreateSession(context.Background(), "http-test-session", "user1", "workspace1")

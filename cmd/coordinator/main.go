@@ -76,6 +76,7 @@ func main() {
 	// Future: Add support for external storage backends via environment variables
 	// Example: STORAGE_BACKEND=redis STORAGE_URL=redis://localhost:6379
 	var sessionStateStorage coordinator.SessionStateStorage = memory.NewInMemorySessionStateStorage()
+	taskQueueStorage := memory.NewInMemoryTaskQueueStorage(10000, 100) // max 10k total tasks, 100 per session
 
 	// WorkerRegistry uses in-memory state (TaskStream cannot be persisted)
 	// Optional: Add metadata persistence layer for recovery scenarios
@@ -84,13 +85,25 @@ func main() {
 	workerClient := coordinator.NewRealWorkerClient(workerRegistry, sessionManager, logger)
 	auditLogger := coordinator.NewAuditLogger(logger)
 
+	// Initialize task queue with retry policy
+	retryPolicy := coordinator.DefaultRetryPolicy()
+	taskDispatcher := coordinator.NewTaskDispatcher(taskQueueStorage, workerClient, &retryPolicy)
+	taskQueue := coordinator.NewTaskQueue(
+		taskQueueStorage,
+		sessionManager,
+		workerClient,
+		taskDispatcher,
+		logger,
+		coordinator.DefaultTaskQueueConfig(),
+	)
+
 	// Configure MCP server
 	cfg := coordinator.Config{
 		Name:    "codegen-mcp-coordinator",
 		Version: "0.1.0",
 	}
 
-	mcpServer := coordinator.NewMCPServer(cfg, sessionManager, workerClient, auditLogger)
+	mcpServer := coordinator.NewMCPServer(cfg, sessionManager, workerClient, auditLogger, taskQueue)
 
 	logger.Info("MCP Server initialized",
 		"name", cfg.Name,
@@ -116,6 +129,10 @@ func main() {
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+	// Start task queue background workers
+	taskQueue.Start()
+	logger.Info("Task queue background workers started")
 
 	// Start gRPC server for workers
 	go func() {
@@ -176,6 +193,10 @@ func main() {
 
 	// Cancel context to stop all background goroutines
 	cancel()
+
+	// Stop task queue
+	logger.Info("Stopping task queue")
+	taskQueue.Stop()
 
 	// Stop gRPC server with timeout
 	logger.Info("Stopping gRPC server")

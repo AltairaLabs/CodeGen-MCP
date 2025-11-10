@@ -133,13 +133,12 @@ func (TaskResult_Status) EnumDescriptor() ([]byte, []int) {
 
 type TaskRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`                                                                   // Unique task identifier
-	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`                                                          // Session ID (not worker registration session!)
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`                                                             // e.g., "fs.write", "run.python"
-	Arguments     map[string]string      `protobuf:"bytes,4,rep,name=arguments,proto3" json:"arguments,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Tool arguments (JSON-encoded)
-	Context       *TaskContext           `protobuf:"bytes,5,opt,name=context,proto3" json:"context,omitempty"`
-	Constraints   *ExecutionConstraints  `protobuf:"bytes,6,opt,name=constraints,proto3" json:"constraints,omitempty"`
-	Sequence      uint64                 `protobuf:"varint,7,opt,name=sequence,proto3" json:"sequence,omitempty"` // Monotonic sequence number for deduplication (0 = no tracking)
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`                   // Unique task identifier
+	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`          // Session ID (not worker registration session!)
+	TypedRequest  *ToolRequest           `protobuf:"bytes,3,opt,name=typed_request,json=typedRequest,proto3" json:"typed_request,omitempty"` // Strongly-typed tool request
+	Context       *TaskContext           `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
+	Constraints   *ExecutionConstraints  `protobuf:"bytes,5,opt,name=constraints,proto3" json:"constraints,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,6,opt,name=sequence,proto3" json:"sequence,omitempty"` // Monotonic sequence number for deduplication (0 = no tracking)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -188,16 +187,9 @@ func (x *TaskRequest) GetSessionId() string {
 	return ""
 }
 
-func (x *TaskRequest) GetToolName() string {
+func (x *TaskRequest) GetTypedRequest() *ToolRequest {
 	if x != nil {
-		return x.ToolName
-	}
-	return ""
-}
-
-func (x *TaskRequest) GetArguments() map[string]string {
-	if x != nil {
-		return x.Arguments
+		return x.TypedRequest
 	}
 	return nil
 }
@@ -620,8 +612,8 @@ func (x *LogEntry) GetSource() string {
 type TaskResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        TaskResult_Status      `protobuf:"varint,1,opt,name=status,proto3,enum=codegen.v1.TaskResult_Status" json:"status,omitempty"`
-	Outputs       map[string]string      `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // Tool-specific outputs
-	Artifacts     []string               `protobuf:"bytes,3,rep,name=artifacts,proto3" json:"artifacts,omitempty"`                                                                       // Artifact IDs/URLs
+	TypedResponse *ToolResponse          `protobuf:"bytes,2,opt,name=typed_response,json=typedResponse,proto3" json:"typed_response,omitempty"` // Strongly-typed tool response
+	Artifacts     []string               `protobuf:"bytes,3,rep,name=artifacts,proto3" json:"artifacts,omitempty"`                              // Artifact IDs/URLs
 	Metadata      *ExecutionMetadata     `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -664,9 +656,9 @@ func (x *TaskResult) GetStatus() TaskResult_Status {
 	return TaskResult_STATUS_UNSPECIFIED
 }
 
-func (x *TaskResult) GetOutputs() map[string]string {
+func (x *TaskResult) GetTypedResponse() *ToolResponse {
 	if x != nil {
-		return x.Outputs
+		return x.TypedResponse
 	}
 	return nil
 }
@@ -1066,19 +1058,15 @@ var File_api_proto_v1_task_execution_proto protoreflect.FileDescriptor
 const file_api_proto_v1_task_execution_proto_rawDesc = "" +
 	"\n" +
 	"!api/proto/v1/task_execution.proto\x12\n" +
-	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\xf9\x02\n" +
+	"codegen.v1\x1a\x19api/proto/v1/common.proto\x1a\x18api/proto/v1/tools.proto\"\x96\x02\n" +
 	"\vTaskRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12D\n" +
-	"\targuments\x18\x04 \x03(\v2&.codegen.v1.TaskRequest.ArgumentsEntryR\targuments\x121\n" +
-	"\acontext\x18\x05 \x01(\v2\x17.codegen.v1.TaskContextR\acontext\x12B\n" +
-	"\vconstraints\x18\x06 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x12\x1a\n" +
-	"\bsequence\x18\a \x01(\x04R\bsequence\x1a<\n" +
-	"\x0eArgumentsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe0\x01\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x12<\n" +
+	"\rtyped_request\x18\x03 \x01(\v2\x17.codegen.v1.ToolRequestR\ftypedRequest\x121\n" +
+	"\acontext\x18\x04 \x01(\v2\x17.codegen.v1.TaskContextR\acontext\x12B\n" +
+	"\vconstraints\x18\x05 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x12\x1a\n" +
+	"\bsequence\x18\x06 \x01(\x04R\bsequence\"\xe0\x01\n" +
 	"\vTaskContext\x12!\n" +
 	"\fworkspace_id\x18\x01 \x01(\tR\vworkspaceId\x12\x17\n" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12?\n" +
@@ -1116,16 +1104,13 @@ const file_api_proto_v1_task_execution_proto_rawDesc = "" +
 	"LEVEL_INFO\x10\x02\x12\x0e\n" +
 	"\n" +
 	"LEVEL_WARN\x10\x03\x12\x0f\n" +
-	"\vLEVEL_ERROR\x10\x04\"\x8b\x03\n" +
+	"\vLEVEL_ERROR\x10\x04\"\xd1\x02\n" +
 	"\n" +
 	"TaskResult\x125\n" +
-	"\x06status\x18\x01 \x01(\x0e2\x1d.codegen.v1.TaskResult.StatusR\x06status\x12=\n" +
-	"\aoutputs\x18\x02 \x03(\v2#.codegen.v1.TaskResult.OutputsEntryR\aoutputs\x12\x1c\n" +
+	"\x06status\x18\x01 \x01(\x0e2\x1d.codegen.v1.TaskResult.StatusR\x06status\x12?\n" +
+	"\x0etyped_response\x18\x02 \x01(\v2\x18.codegen.v1.ToolResponseR\rtypedResponse\x12\x1c\n" +
 	"\tartifacts\x18\x03 \x03(\tR\tartifacts\x129\n" +
-	"\bmetadata\x18\x04 \x01(\v2\x1d.codegen.v1.ExecutionMetadataR\bmetadata\x1a:\n" +
-	"\fOutputsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"r\n" +
+	"\bmetadata\x18\x04 \x01(\v2\x1d.codegen.v1.ExecutionMetadataR\bmetadata\"r\n" +
 	"\x06Status\x12\x16\n" +
 	"\x12STATUS_UNSPECIFIED\x10\x00\x12\x12\n" +
 	"\x0eSTATUS_SUCCESS\x10\x01\x12\x12\n" +
@@ -1182,7 +1167,7 @@ func file_api_proto_v1_task_execution_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proto_v1_task_execution_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_proto_v1_task_execution_proto_msgTypes = make([]protoimpl.MessageInfo, 16)
+var file_api_proto_v1_task_execution_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_api_proto_v1_task_execution_proto_goTypes = []any{
 	(LogEntry_Level)(0),          // 0: codegen.v1.LogEntry.Level
 	(TaskResult_Status)(0),       // 1: codegen.v1.TaskResult.Status
@@ -1199,23 +1184,23 @@ var file_api_proto_v1_task_execution_proto_goTypes = []any{
 	(*CancelResponse)(nil),       // 12: codegen.v1.CancelResponse
 	(*StatusRequest)(nil),        // 13: codegen.v1.StatusRequest
 	(*StatusResponse)(nil),       // 14: codegen.v1.StatusResponse
-	nil,                          // 15: codegen.v1.TaskRequest.ArgumentsEntry
-	nil,                          // 16: codegen.v1.TaskContext.EnvVarsEntry
-	nil,                          // 17: codegen.v1.TaskResult.OutputsEntry
+	nil,                          // 15: codegen.v1.TaskContext.EnvVarsEntry
+	(*ToolRequest)(nil),          // 16: codegen.v1.ToolRequest
+	(*ToolResponse)(nil),         // 17: codegen.v1.ToolResponse
 	(*ResourceUsage)(nil),        // 18: codegen.v1.ResourceUsage
 }
 var file_api_proto_v1_task_execution_proto_depIdxs = []int32{
-	15, // 0: codegen.v1.TaskRequest.arguments:type_name -> codegen.v1.TaskRequest.ArgumentsEntry
+	16, // 0: codegen.v1.TaskRequest.typed_request:type_name -> codegen.v1.ToolRequest
 	3,  // 1: codegen.v1.TaskRequest.context:type_name -> codegen.v1.TaskContext
 	4,  // 2: codegen.v1.TaskRequest.constraints:type_name -> codegen.v1.ExecutionConstraints
-	16, // 3: codegen.v1.TaskContext.env_vars:type_name -> codegen.v1.TaskContext.EnvVarsEntry
+	15, // 3: codegen.v1.TaskContext.env_vars:type_name -> codegen.v1.TaskContext.EnvVarsEntry
 	6,  // 4: codegen.v1.TaskResponse.progress:type_name -> codegen.v1.ProgressUpdate
 	7,  // 5: codegen.v1.TaskResponse.log:type_name -> codegen.v1.LogEntry
 	8,  // 6: codegen.v1.TaskResponse.result:type_name -> codegen.v1.TaskResult
 	10, // 7: codegen.v1.TaskResponse.error:type_name -> codegen.v1.TaskError
 	0,  // 8: codegen.v1.LogEntry.level:type_name -> codegen.v1.LogEntry.Level
 	1,  // 9: codegen.v1.TaskResult.status:type_name -> codegen.v1.TaskResult.Status
-	17, // 10: codegen.v1.TaskResult.outputs:type_name -> codegen.v1.TaskResult.OutputsEntry
+	17, // 10: codegen.v1.TaskResult.typed_response:type_name -> codegen.v1.ToolResponse
 	9,  // 11: codegen.v1.TaskResult.metadata:type_name -> codegen.v1.ExecutionMetadata
 	18, // 12: codegen.v1.ExecutionMetadata.peak_usage:type_name -> codegen.v1.ResourceUsage
 	1,  // 13: codegen.v1.StatusResponse.status:type_name -> codegen.v1.TaskResult.Status
@@ -1239,6 +1224,7 @@ func file_api_proto_v1_task_execution_proto_init() {
 		return
 	}
 	file_api_proto_v1_common_proto_init()
+	file_api_proto_v1_tools_proto_init()
 	file_api_proto_v1_task_execution_proto_msgTypes[3].OneofWrappers = []any{
 		(*TaskResponse_Progress)(nil),
 		(*TaskResponse_Log)(nil),
@@ -1251,7 +1237,7 @@ func file_api_proto_v1_task_execution_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_task_execution_proto_rawDesc), len(file_api_proto_v1_task_execution_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   16,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

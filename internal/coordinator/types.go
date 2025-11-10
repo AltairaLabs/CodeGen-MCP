@@ -3,6 +3,8 @@ package coordinator
 import (
 	"context"
 	"time"
+
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
 // SessionState represents the lifecycle state of a session
@@ -38,8 +40,10 @@ type Session struct {
 
 // WorkerClient defines the interface for communicating with workers
 type WorkerClient interface {
-	// ExecuteTask sends a task to a worker and returns the result
+	// ExecuteTask sends a task to a worker and returns the result (deprecated - use ExecuteTypedTask)
 	ExecuteTask(ctx context.Context, workspaceID, toolName string, args TaskArgs) (*TaskResult, error)
+	// ExecuteTypedTask sends a typed task to a worker and returns the result
+	ExecuteTypedTask(ctx context.Context, workspaceID string, request *protov1.ToolRequest) (*TaskResult, error)
 }
 
 // TaskResult represents the result of a worker task execution
@@ -53,6 +57,33 @@ type TaskResult struct {
 
 // TaskArgs is a convenience alias for task argument maps
 type TaskArgs map[string]interface{}
+
+// TaskResponse represents the immediate response when a task is enqueued
+type TaskResponse struct {
+	TaskID    string    `json:"task_id"`
+	Status    string    `json:"status"` // "queued", "dispatched", "completed", "failed"
+	SessionID string    `json:"session_id"`
+	Sequence  uint64    `json:"sequence"`
+	Message   string    `json:"message,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TaskResultNotification represents a notification sent when a task completes
+type TaskResultNotification struct {
+	TaskID      string        `json:"task_id"`
+	Status      string        `json:"status"` // "completed", "failed", "progress"
+	Result      *TaskResult   `json:"result,omitempty"`
+	Progress    *TaskProgress `json:"progress,omitempty"`
+	Error       string        `json:"error,omitempty"`
+	CompletedAt time.Time     `json:"completed_at,omitempty"`
+}
+
+// TaskProgress represents progress updates for long-running tasks
+type TaskProgress struct {
+	Percentage int    `json:"percentage"` // 0-100
+	Message    string `json:"message"`
+	Stage      string `json:"stage"`
+}
 
 // QueuedTask represents a task in the queue with retry and sequencing support
 type QueuedTask struct {

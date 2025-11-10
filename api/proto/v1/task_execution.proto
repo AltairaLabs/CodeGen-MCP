@@ -3,6 +3,7 @@ syntax = "proto3";
 package codegen.v1;
 
 import "api/proto/v1/common.proto";
+import "api/proto/v1/tools.proto";
 
 option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
 
@@ -21,11 +22,10 @@ service TaskExecution {
 message TaskRequest {
   string task_id = 1;              // Unique task identifier
   string session_id = 2;           // Session ID (not worker registration session!)
-  string tool_name = 3;            // e.g., "fs.write", "run.python"
-  map<string, string> arguments = 4;  // Tool arguments (JSON-encoded)
-  TaskContext context = 5;
-  ExecutionConstraints constraints = 6;
-  uint64 sequence = 7;             // Monotonic sequence number for deduplication (0 = no tracking)
+  ToolRequest typed_request = 3;   // Strongly-typed tool request
+  TaskContext context = 4;
+  ExecutionConstraints constraints = 5;
+  uint64 sequence = 6;             // Monotonic sequence number for deduplication (0 = no tracking)
 }
 
 message TaskContext {
@@ -83,7 +83,7 @@ message TaskResult {
     STATUS_CANCELLED = 4;
   }
   Status status = 1;
-  map<string, string> outputs = 2;    // Tool-specific outputs
+  ToolResponse typed_response = 2;    // Strongly-typed tool response
   repeated string artifacts = 3;      // Artifact IDs/URLs
   ExecutionMetadata metadata = 4;
 }

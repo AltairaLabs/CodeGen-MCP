@@ -384,10 +384,11 @@ func (rc *Client) handleTaskAssignment(assignment *protov1.TaskAssignment) {
 	taskID := assignment.TaskId
 	sessionID := assignment.SessionId
 	sequence := assignment.Sequence
+	toolName := getToolNameFromRequest(assignment.Request)
 
 	rc.logger.Info("Received task assignment",
 		"task_id", taskID,
-		"tool_name", assignment.ToolName,
+		"tool_name", toolName,
 		"session_id", sessionID,
 		"sequence", sequence)
 
@@ -413,7 +414,7 @@ func (rc *Client) handleTaskAssignment(assignment *protov1.TaskAssignment) {
 						Payload: &protov1.TaskStreamResponse_Result{
 							Result: &protov1.TaskStreamResult{
 								Status:   protov1.TaskStreamResult_STATUS_SUCCESS,
-								Outputs:  map[string]string{"message": "Task already completed (duplicate)"},
+								Response: nil, // Empty response for duplicate task
 								Sequence: sequence,
 							},
 						},
@@ -430,13 +431,12 @@ func (rc *Client) handleTaskAssignment(assignment *protov1.TaskAssignment) {
 
 	// Convert to TaskRequest format for task executor
 	req := &protov1.TaskRequest{
-		TaskId:      taskID,
-		SessionId:   sessionID,
-		ToolName:    assignment.ToolName,
-		Arguments:   assignment.Arguments,
-		Context:     assignment.Context,
-		Constraints: assignment.Constraints,
-		Sequence:    sequence,
+		TaskId:       taskID,
+		SessionId:    sessionID,
+		TypedRequest: assignment.Request,
+		Context:      assignment.Context,
+		Constraints:  assignment.Constraints,
+		Sequence:     sequence,
 	}
 
 	// Create a mock stream for collecting responses
@@ -587,7 +587,7 @@ func (t *taskResponseCollector) Send(resp *protov1.TaskResponse) error {
 		streamResp.Payload = &protov1.TaskStreamResponse_Result{
 			Result: &protov1.TaskStreamResult{
 				Status:    protov1.TaskStreamResult_Status(payload.Result.Status),
-				Outputs:   payload.Result.Outputs,
+				Response:  payload.Result.TypedResponse,
 				Artifacts: payload.Result.Artifacts,
 				Metadata: &protov1.TaskExecutionMetadata{
 					StartTimeMs: payload.Result.Metadata.StartTimeMs,
@@ -783,5 +783,29 @@ func (rc *Client) reconnect(ctx context.Context) error {
 
 		rc.logger.Info("Task stream restored after reconnection")
 		return nil
+	}
+}
+
+// getToolNameFromRequest extracts the tool name from a ToolRequest
+func getToolNameFromRequest(request *protov1.ToolRequest) string {
+	if request == nil {
+		return "unknown"
+	}
+
+	switch request.Request.(type) {
+	case *protov1.ToolRequest_Echo:
+		return "echo"
+	case *protov1.ToolRequest_FsRead:
+		return "fs.read"
+	case *protov1.ToolRequest_FsWrite:
+		return "fs.write"
+	case *protov1.ToolRequest_FsList:
+		return "fs.list"
+	case *protov1.ToolRequest_RunPython:
+		return "run.python"
+	case *protov1.ToolRequest_PkgInstall:
+		return "pkg.install"
+	default:
+		return "unknown"
 	}
 }

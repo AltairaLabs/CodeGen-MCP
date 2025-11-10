@@ -50,6 +50,29 @@ type TaskExecutor struct {
 	mu          sync.RWMutex
 }
 
+// getToolNameFromTypedRequest extracts the tool name from a typed request
+func getToolNameFromTypedRequest(req *protov1.ToolRequest) string {
+	if req == nil {
+		return "unknown"
+	}
+	switch req.Request.(type) {
+	case *protov1.ToolRequest_Echo:
+		return "echo"
+	case *protov1.ToolRequest_FsRead:
+		return "fs.read"
+	case *protov1.ToolRequest_FsWrite:
+		return "fs.write"
+	case *protov1.ToolRequest_FsList:
+		return "fs.list"
+	case *protov1.ToolRequest_RunPython:
+		return "run.python"
+	case *protov1.ToolRequest_PkgInstall:
+		return "pkg.install"
+	default:
+		return "unknown"
+	}
+}
+
 // ActiveTask represents a running task
 type ActiveTask struct {
 	TaskID    string
@@ -83,11 +106,14 @@ func (te *TaskExecutor) Execute(ctx context.Context, req *protov1.TaskRequest, s
 	taskCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// Extract tool name from typed request
+	toolName := getToolNameFromTypedRequest(req.TypedRequest)
+
 	// Register active task
 	task := &ActiveTask{
 		TaskID:    req.TaskId,
 		SessionID: req.SessionId,
-		ToolName:  req.ToolName,
+		ToolName:  toolName,
 		StartTime: time.Now(),
 		Status:    protov1.TaskResult_STATUS_UNSPECIFIED,
 		Cancel:    cancel,
@@ -217,6 +243,9 @@ func (te *TaskExecutor) GetStatus(ctx context.Context, req *protov1.StatusReques
 //
 //nolint:lll // Protobuf types create inherently long function signatures
 func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *WorkerSession, req *protov1.TaskRequest, stream protov1.TaskExecution_ExecuteTaskServer) (*protov1.TaskResult, error) {
+	// Extract tool name from typed request
+	toolName := getToolNameFromTypedRequest(req.TypedRequest)
+
 	// Validate metadata requirements before execution
 	metadata, metaErr := te.sessionPool.GetSessionMetadata(req.SessionId)
 	if metaErr != nil {
@@ -224,7 +253,7 @@ func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *Worke
 	}
 
 	// Get metadata requirements for this tool
-	requirements := te.getToolMetadataRequirements(req.ToolName)
+	requirements := te.getToolMetadataRequirements(toolName)
 	if len(requirements) > 0 {
 		if err := ValidateMetadata(metadata, requirements); err != nil {
 			return nil, fmt.Errorf("metadata validation failed: %w", err)
@@ -238,7 +267,7 @@ func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *Worke
 			Progress: &protov1.ProgressUpdate{
 				PercentComplete: progressStarting,
 				Stage:           "starting",
-				Message:         fmt.Sprintf("Executing %s", req.ToolName),
+				Message:         fmt.Sprintf("Executing %s", toolName),
 			},
 		},
 	})
@@ -249,34 +278,19 @@ func (te *TaskExecutor) executeToolInSession(ctx context.Context, session *Worke
 		Payload: &protov1.TaskResponse_Log{
 			Log: &protov1.LogEntry{
 				Level:       protov1.LogEntry_LEVEL_INFO,
-				Message:     fmt.Sprintf("Starting tool execution: %s", req.ToolName),
+				Message:     fmt.Sprintf("Starting tool execution: %s", toolName),
 				TimestampMs: time.Now().UnixMilli(),
 				Source:      "task_executor",
 			},
 		},
 	})
 
-	// Route to appropriate tool handler
-	var result *protov1.TaskResult
-	var err error
-
-	switch req.ToolName {
-	case "fs.write":
-		result, err = te.handleFsWrite(ctx, session, req)
-	case "fs.read":
-		result, err = te.handleFsRead(ctx, session, req)
-	case "fs.list":
-		result, err = te.handleFsList(ctx, session, req)
-	case "run.python":
-		result, err = te.handleRunPython(ctx, session, req, stream)
-	case "pkg.install":
-		result, err = te.handlePkgInstall(ctx, session, req, stream)
-	case "echo":
-		result, err = te.handleEcho(ctx, session, req)
-	default:
-		return nil, fmt.Errorf("unknown tool: %s", req.ToolName)
+	// Route to typed tool handler
+	if req.TypedRequest == nil {
+		return nil, fmt.Errorf("task request missing typed request")
 	}
 
+	result, err := te.executeTypedTool(ctx, session, req.TypedRequest, stream)
 	if err != nil {
 		return nil, err
 	}
@@ -316,4 +330,27 @@ func (te *TaskExecutor) getToolMetadataRequirements(toolName string) []MetadataR
 
 	// No metadata requirements currently defined
 	return []MetadataRequirement{}
+}
+
+// executeTypedTool executes a tool using strongly-typed request/response
+//
+//nolint:lll // Protobuf types create inherently long function signatures
+func (te *TaskExecutor) executeTypedTool(ctx context.Context, session *WorkerSession, request *protov1.ToolRequest, stream protov1.TaskExecution_ExecuteTaskServer) (*protov1.TaskResult, error) {
+	// Route based on the type of request
+	switch req := request.Request.(type) {
+	case *protov1.ToolRequest_Echo:
+		return te.handleEchoTyped(ctx, session, req.Echo)
+	case *protov1.ToolRequest_FsRead:
+		return te.handleFsReadTyped(ctx, session, req.FsRead)
+	case *protov1.ToolRequest_FsWrite:
+		return te.handleFsWriteTyped(ctx, session, req.FsWrite)
+	case *protov1.ToolRequest_FsList:
+		return te.handleFsListTyped(ctx, session, req.FsList)
+	case *protov1.ToolRequest_RunPython:
+		return te.handleRunPythonTyped(ctx, session, req.RunPython, stream)
+	case *protov1.ToolRequest_PkgInstall:
+		return te.handlePkgInstallTyped(ctx, session, req.PkgInstall, stream)
+	default:
+		return nil, fmt.Errorf("unknown typed tool request: %T", request.Request)
+	}
 }

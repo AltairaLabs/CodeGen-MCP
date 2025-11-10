@@ -33,11 +33,13 @@ build-worker: ## Build worker binary
 	@go build -o bin/worker ./cmd/worker
 	@echo "worker built successfully -> bin/worker"
 
-run-coordinator: ## Run coordinator locally
-	@go run ./cmd/coordinator
+run-coordinator: ## Run coordinator locally with auto-reload
+	@echo "Starting coordinator with Air (auto-reload enabled)..."
+	@air -c .air.coordinator.toml
 
-run-worker: ## Run worker locally
-	@go run ./cmd/worker
+run-worker: ## Run worker locally with auto-reload
+	@echo "Starting worker with Air (auto-reload enabled)..."
+	@air -c .air.worker.toml
 
 test: ## Run all tests
 	@echo "Running tests..."

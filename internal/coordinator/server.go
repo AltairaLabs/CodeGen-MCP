@@ -13,16 +13,21 @@ import (
 
 const (
 	// Tool names
-	toolEcho       = "echo"
-	toolFsRead     = "fs.read"
-	toolFsWrite    = "fs.write"
-	toolFsList     = "fs.list"
-	toolRunPython  = "run.python"
-	toolPkgInstall = "pkg.install"
+	toolEcho          = "echo"
+	toolFsRead        = "fs.read"
+	toolFsWrite       = "fs.write"
+	toolFsList        = "fs.list"
+	toolRunPython     = "run.python"
+	toolPkgInstall    = "pkg.install"
+	toolGetTaskResult = "task.get_result"
+	toolGetTaskStatus = "task.get_status"
 
 	// Error messages
 	errSessionError   = "session error: %v"
 	errNoWorkersAvail = "no workers available to handle request"
+
+	// Task status messages
+	msgTaskQueued = "Task %s queued for execution"
 )
 
 // sessionIDKey is the context key for session ID
@@ -39,6 +44,10 @@ type MCPServer struct {
 	sessionManager *SessionManager
 	workerClient   WorkerClient
 	auditLogger    *AuditLogger
+	taskQueue      TaskQueueInterface
+	resultStreamer *ResultStreamer
+	resultCache    *ResultCache
+	sseManager     *SSESessionManager
 }
 
 // Config holds configuration for the MCP server
@@ -48,7 +57,7 @@ type Config struct {
 }
 
 // NewMCPServer creates and configures a new MCP server
-func NewMCPServer(cfg Config, sessionMgr *SessionManager, worker WorkerClient, audit *AuditLogger) *MCPServer {
+func NewMCPServer(cfg Config, sessionMgr *SessionManager, worker WorkerClient, audit *AuditLogger, taskQueue TaskQueueInterface) *MCPServer {
 	// Create the mcp-go server
 	mcpServer := server.NewMCPServer(
 		cfg.Name,
@@ -57,11 +66,24 @@ func NewMCPServer(cfg Config, sessionMgr *SessionManager, worker WorkerClient, a
 		server.WithRecovery(),
 	)
 
+	// Initialize async result streaming components
+	resultCache := NewResultCache(5 * 60 * 1000000000) // 5 minutes TTL
+	sseManager := NewSSESessionManager()
+	logger := slog.Default()
+	resultStreamer := NewResultStreamer(sseManager, resultCache, logger)
+
+	// Wire up result streamer to task queue
+	taskQueue.SetResultStreamer(resultStreamer)
+
 	ms := &MCPServer{
 		server:         mcpServer,
 		sessionManager: sessionMgr,
 		workerClient:   worker,
 		auditLogger:    audit,
+		taskQueue:      taskQueue,
+		resultStreamer: resultStreamer,
+		resultCache:    resultCache,
+		sseManager:     sseManager,
 	}
 
 	// Register tools
@@ -136,180 +158,26 @@ func (ms *MCPServer) registerTools() {
 		),
 	)
 	ms.server.AddTool(pkgInstallTool, ms.handlePkgInstall)
-}
 
-// handleEcho implements the echo tool
-func (ms *MCPServer) handleEcho(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	defer func() {
-		if r := recover(); r != nil {
-			slog.Error("PANIC in handleEcho",
-				"panic", r,
-				"session_manager_nil", ms.sessionManager == nil,
-				"worker_client_nil", ms.workerClient == nil,
-				"audit_logger_nil", ms.auditLogger == nil,
-				"session_manager_registry_nil", ms.sessionManager != nil && ms.sessionManager.workerRegistry == nil,
-			)
-			panic(r) // re-panic so mcp-go can handle it
-		}
-	}()
+	// task.get_result tool - retrieve completed task result from cache
+	getTaskResultTool := mcp.NewTool(toolGetTaskResult,
+		mcp.WithDescription("Retrieve the result of a completed task from cache"),
+		mcp.WithString("task_id",
+			mcp.Required(),
+			mcp.Description("The task ID returned when the task was queued"),
+		),
+	)
+	ms.server.AddTool(getTaskResultTool, ms.handleGetTaskResult)
 
-	message, err := request.RequireString("message")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	slog.Info("handleEcho: before getOrCreateSession")
-	// Get or create session
-	session, err := ms.getOrCreateSession(ctx)
-	slog.Info("handleEcho: after getOrCreateSession", "error", err, "session_nil", session == nil)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
-	}
-
-	// Audit log
-	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
-		SessionID:   session.ID,
-		UserID:      session.UserID,
-		ToolName:    toolEcho,
-		Arguments:   TaskArgs{"message": message},
-		WorkspaceID: session.WorkspaceID,
-	})
-
-	// Execute via worker (add session ID to context)
-	ctxWithSession := contextWithSessionID(ctx, session.ID)
-	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolEcho, TaskArgs{
-		"message": message,
-	})
-
-	if err != nil {
-		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-			SessionID: session.ID,
-			ToolName:  toolEcho,
-			ErrorMsg:  err.Error(),
-		})
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-		SessionID: session.ID,
-		ToolName:  toolEcho,
-		Result:    result,
-	})
-
-	return mcp.NewToolResultText(result.Output), nil
-}
-
-// handleFsRead implements the fs.read tool
-func (ms *MCPServer) handleFsRead(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Check if workers are available before attempting to create session
-	if !ms.hasWorkersAvailable() {
-		return mcp.NewToolResultError(errNoWorkersAvail), nil
-	}
-
-	path, err := request.RequireString("path")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	// Validate path is safe
-	if vErr := ms.validateWorkspacePath(path); vErr != nil {
-		return mcp.NewToolResultError(vErr.Error()), nil
-	}
-
-	// Get or create session
-	session, err := ms.getOrCreateSession(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
-	}
-
-	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
-		SessionID:   session.ID,
-		UserID:      session.UserID,
-		ToolName:    toolFsRead,
-		Arguments:   TaskArgs{"path": path},
-		WorkspaceID: session.WorkspaceID,
-	})
-
-	ctxWithSession := contextWithSessionID(ctx, session.ID)
-	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolFsRead, TaskArgs{"path": path})
-
-	if err != nil {
-		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-			SessionID: session.ID,
-			ToolName:  toolFsRead,
-			ErrorMsg:  err.Error(),
-		})
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-		SessionID: session.ID,
-		ToolName:  toolFsRead,
-		Result:    result,
-	})
-
-	return mcp.NewToolResultText(result.Output), nil
-}
-
-// handleFsWrite implements the fs.write tool
-func (ms *MCPServer) handleFsWrite(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Check if workers are available before attempting to create session
-	if !ms.hasWorkersAvailable() {
-		return mcp.NewToolResultError(errNoWorkersAvail), nil
-	}
-
-	path, err := request.RequireString("path")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	contents, err := request.RequireString("contents")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	// Validate path is safe
-	if vErr := ms.validateWorkspacePath(path); vErr != nil {
-		return mcp.NewToolResultError(vErr.Error()), nil
-	}
-
-	// Get or create session
-	session, err := ms.getOrCreateSession(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
-	}
-
-	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
-		SessionID:   session.ID,
-		UserID:      session.UserID,
-		ToolName:    toolFsWrite,
-		Arguments:   TaskArgs{"path": path, "contents": contents},
-		WorkspaceID: session.WorkspaceID,
-	})
-
-	// Add session ID to context for worker execution
-	ctxWithSession := contextWithSessionID(ctx, session.ID)
-	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolFsWrite, TaskArgs{
-		"path":     path,
-		"contents": contents,
-	})
-
-	if err != nil {
-		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-			SessionID: session.ID,
-			ToolName:  toolFsWrite,
-			ErrorMsg:  err.Error(),
-		})
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-		SessionID: session.ID,
-		ToolName:  toolFsWrite,
-		Result:    result,
-	})
-
-	return mcp.NewToolResultText(result.Output), nil
+	// task.get_status tool - check task status
+	getTaskStatusTool := mcp.NewTool(toolGetTaskStatus,
+		mcp.WithDescription("Check the status of a queued or running task"),
+		mcp.WithString("task_id",
+			mcp.Required(),
+			mcp.Description("The task ID to check status for"),
+		),
+	)
+	ms.server.AddTool(getTaskStatusTool, ms.handleGetTaskStatus)
 }
 
 // validateWorkspacePath ensures the path is safe and relative to workspace
@@ -422,184 +290,4 @@ func (ms *MCPServer) ServeHTTP(addr string) error {
 func (ms *MCPServer) ServeHTTPWithLogger(addr string, logger *slog.Logger) error {
 	logger.Info("Starting MCP server with HTTP/SSE transport", "address", addr, "base_path", "/mcp")
 	return ms.ServeHTTP(addr)
-}
-
-// handleFsList implements the fs.list tool
-func (ms *MCPServer) handleFsList(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Check if workers are available before attempting to create session
-	if !ms.hasWorkersAvailable() {
-		return mcp.NewToolResultError(errNoWorkersAvail), nil
-	}
-
-	// Path is optional, defaults to root
-	path := request.GetString("path", "")
-
-	// Validate path if provided
-	if path != "" {
-		if vErr := ms.validateWorkspacePath(path); vErr != nil {
-			return mcp.NewToolResultError(vErr.Error()), nil
-		}
-	}
-
-	// Get or create session
-	session, err := ms.getOrCreateSession(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
-	}
-
-	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
-		SessionID:   session.ID,
-		UserID:      session.UserID,
-		ToolName:    toolFsList,
-		Arguments:   TaskArgs{"path": path},
-		WorkspaceID: session.WorkspaceID,
-	})
-
-	args := TaskArgs{"path": path}
-	ctxWithSession := contextWithSessionID(ctx, session.ID)
-	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolFsList, args)
-
-	if err != nil {
-		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-			SessionID: session.ID,
-			ToolName:  toolFsList,
-			ErrorMsg:  err.Error(),
-		})
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-		SessionID: session.ID,
-		ToolName:  toolFsList,
-		Result:    result,
-	})
-
-	return mcp.NewToolResultText(result.Output), nil
-}
-
-// handleRunPython implements the run.python tool
-func (ms *MCPServer) handleRunPython(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Check if workers are available before attempting to create session
-	if !ms.hasWorkersAvailable() {
-		return mcp.NewToolResultError(errNoWorkersAvail), nil
-	}
-
-	// Get optional code and file parameters
-	code := request.GetString("code", "")
-	file := request.GetString("file", "")
-
-	// Must have either code or file parameter
-	if code == "" && file == "" {
-		return mcp.NewToolResultError("must provide either 'code' or 'file' parameter"), nil
-	}
-
-	// Validate file path if provided
-	if file != "" {
-		if vErr := ms.validateWorkspacePath(file); vErr != nil {
-			return mcp.NewToolResultError(vErr.Error()), nil
-		}
-	}
-
-	// Get or create session
-	session, err := ms.getOrCreateSession(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
-	}
-
-	args := TaskArgs{}
-	if code != "" {
-		args["code"] = code
-	}
-	if file != "" {
-		args["file"] = file
-	}
-
-	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
-		SessionID:   session.ID,
-		UserID:      session.UserID,
-		ToolName:    toolRunPython,
-		Arguments:   args,
-		WorkspaceID: session.WorkspaceID,
-	})
-
-	ctxWithSession := contextWithSessionID(ctx, session.ID)
-	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolRunPython, args)
-
-	if err != nil {
-		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-			SessionID: session.ID,
-			ToolName:  toolRunPython,
-			ErrorMsg:  err.Error(),
-		})
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-		SessionID: session.ID,
-		ToolName:  toolRunPython,
-		Result:    result,
-	})
-
-	// Include both stdout and stderr in result
-	output := result.Output
-	if result.Error != "" {
-		output = fmt.Sprintf("stdout:\n%s\n\nstderr:\n%s", result.Output, result.Error)
-	}
-
-	return mcp.NewToolResultText(output), nil
-}
-
-// handlePkgInstall implements the pkg.install tool
-func (ms *MCPServer) handlePkgInstall(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// Check if workers are available before attempting to create session
-	if !ms.hasWorkersAvailable() {
-		return mcp.NewToolResultError(errNoWorkersAvail), nil
-	}
-
-	packages, err := request.RequireString("packages")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	// Validate packages string is not empty
-	packages = strings.TrimSpace(packages)
-	if packages == "" {
-		return mcp.NewToolResultError("packages parameter cannot be empty"), nil
-	}
-
-	// Get or create session
-	session, err := ms.getOrCreateSession(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf(errSessionError, err)), nil
-	}
-
-	ms.auditLogger.LogToolCall(ctx, &AuditEntry{
-		SessionID:   session.ID,
-		UserID:      session.UserID,
-		ToolName:    toolPkgInstall,
-		Arguments:   TaskArgs{"packages": packages},
-		WorkspaceID: session.WorkspaceID,
-	})
-
-	ctxWithSession := contextWithSessionID(ctx, session.ID)
-	result, err := ms.workerClient.ExecuteTask(ctxWithSession, session.WorkspaceID, toolPkgInstall, TaskArgs{
-		"packages": packages,
-	})
-
-	if err != nil {
-		ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-			SessionID: session.ID,
-			ToolName:  toolPkgInstall,
-			ErrorMsg:  err.Error(),
-		})
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	ms.auditLogger.LogToolResult(ctx, &AuditEntry{
-		SessionID: session.ID,
-		ToolName:  toolPkgInstall,
-		Result:    result,
-	})
-
-	return mcp.NewToolResultText(result.Output), nil
 }

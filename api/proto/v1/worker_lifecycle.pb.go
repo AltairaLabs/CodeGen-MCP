@@ -912,11 +912,10 @@ type TaskAssignment struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	SessionId     string                 `protobuf:"bytes,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	ToolName      string                 `protobuf:"bytes,3,opt,name=tool_name,json=toolName,proto3" json:"tool_name,omitempty"`
-	Arguments     map[string]string      `protobuf:"bytes,4,rep,name=arguments,proto3" json:"arguments,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	Context       *TaskContext           `protobuf:"bytes,5,opt,name=context,proto3" json:"context,omitempty"`
-	Constraints   *ExecutionConstraints  `protobuf:"bytes,6,opt,name=constraints,proto3" json:"constraints,omitempty"`
-	Sequence      uint64                 `protobuf:"varint,7,opt,name=sequence,proto3" json:"sequence,omitempty"` // Monotonic sequence number for deduplication (0 = no tracking)
+	Request       *ToolRequest           `protobuf:"bytes,3,opt,name=request,proto3" json:"request,omitempty"` // Strongly-typed tool request
+	Context       *TaskContext           `protobuf:"bytes,4,opt,name=context,proto3" json:"context,omitempty"`
+	Constraints   *ExecutionConstraints  `protobuf:"bytes,5,opt,name=constraints,proto3" json:"constraints,omitempty"`
+	Sequence      uint64                 `protobuf:"varint,6,opt,name=sequence,proto3" json:"sequence,omitempty"` // Monotonic sequence number for deduplication (0 = no tracking)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -965,16 +964,9 @@ func (x *TaskAssignment) GetSessionId() string {
 	return ""
 }
 
-func (x *TaskAssignment) GetToolName() string {
+func (x *TaskAssignment) GetRequest() *ToolRequest {
 	if x != nil {
-		return x.ToolName
-	}
-	return ""
-}
-
-func (x *TaskAssignment) GetArguments() map[string]string {
-	if x != nil {
-		return x.Arguments
+		return x.Request
 	}
 	return nil
 }
@@ -1254,7 +1246,7 @@ func (x *TaskLogEntry) GetSource() string {
 type TaskStreamResult struct {
 	state           protoimpl.MessageState  `protogen:"open.v1"`
 	Status          TaskStreamResult_Status `protobuf:"varint,1,opt,name=status,proto3,enum=codegen.v1.TaskStreamResult_Status" json:"status,omitempty"`
-	Outputs         map[string]string       `protobuf:"bytes,2,rep,name=outputs,proto3" json:"outputs,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	Response        *ToolResponse           `protobuf:"bytes,2,opt,name=response,proto3" json:"response,omitempty"` // Strongly-typed tool response
 	Artifacts       []string                `protobuf:"bytes,3,rep,name=artifacts,proto3" json:"artifacts,omitempty"`
 	Metadata        *TaskExecutionMetadata  `protobuf:"bytes,4,opt,name=metadata,proto3" json:"metadata,omitempty"`
 	Sequence        uint64                  `protobuf:"varint,5,opt,name=sequence,proto3" json:"sequence,omitempty"`                                                                                                               // Sequence number of completed task (for deduplication tracking)
@@ -1300,9 +1292,9 @@ func (x *TaskStreamResult) GetStatus() TaskStreamResult_Status {
 	return TaskStreamResult_STATUS_UNSPECIFIED
 }
 
-func (x *TaskStreamResult) GetOutputs() map[string]string {
+func (x *TaskStreamResult) GetResponse() *ToolResponse {
 	if x != nil {
-		return x.Outputs
+		return x.Response
 	}
 	return nil
 }
@@ -1674,7 +1666,7 @@ var File_api_proto_v1_worker_lifecycle_proto protoreflect.FileDescriptor
 const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"\n" +
 	"#api/proto/v1/worker_lifecycle.proto\x12\n" +
-	"codegen.v1\x1a\x19api/proto/v1/common.proto\x1a!api/proto/v1/task_execution.proto\"\x82\x02\n" +
+	"codegen.v1\x1a\x19api/proto/v1/common.proto\x1a!api/proto/v1/task_execution.proto\x1a\x18api/proto/v1/tools.proto\"\x82\x02\n" +
 	"\x0fRegisterRequest\x12\x1b\n" +
 	"\tworker_id\x18\x01 \x01(\tR\bworkerId\x12\x1d\n" +
 	"\n" +
@@ -1740,19 +1732,15 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"\tkeepalive\x18\x03 \x01(\v2\x1b.codegen.v1.StreamKeepAliveH\x00R\tkeepalive\x12I\n" +
 	"\x0esession_create\x18\x04 \x01(\v2 .codegen.v1.SessionCreateRequestH\x00R\rsessionCreate\x12L\n" +
 	"\x0fsession_created\x18\x05 \x01(\v2!.codegen.v1.SessionCreateResponseH\x00R\x0esessionCreatedB\t\n" +
-	"\amessage\"\xff\x02\n" +
+	"\amessage\"\x8e\x02\n" +
 	"\x0eTaskAssignment\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\tR\tsessionId\x12\x1b\n" +
-	"\ttool_name\x18\x03 \x01(\tR\btoolName\x12G\n" +
-	"\targuments\x18\x04 \x03(\v2).codegen.v1.TaskAssignment.ArgumentsEntryR\targuments\x121\n" +
-	"\acontext\x18\x05 \x01(\v2\x17.codegen.v1.TaskContextR\acontext\x12B\n" +
-	"\vconstraints\x18\x06 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x12\x1a\n" +
-	"\bsequence\x18\a \x01(\x04R\bsequence\x1a<\n" +
-	"\x0eArgumentsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x91\x02\n" +
+	"session_id\x18\x02 \x01(\tR\tsessionId\x121\n" +
+	"\arequest\x18\x03 \x01(\v2\x17.codegen.v1.ToolRequestR\arequest\x121\n" +
+	"\acontext\x18\x04 \x01(\v2\x17.codegen.v1.TaskContextR\acontext\x12B\n" +
+	"\vconstraints\x18\x05 \x01(\v2 .codegen.v1.ExecutionConstraintsR\vconstraints\x12\x1a\n" +
+	"\bsequence\x18\x06 \x01(\x04R\bsequence\"\x91\x02\n" +
 	"\x12TaskStreamResponse\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12<\n" +
 	"\bprogress\x18\x02 \x01(\v2\x1e.codegen.v1.TaskProgressUpdateH\x00R\bprogress\x12,\n" +
@@ -1776,17 +1764,14 @@ const file_api_proto_v1_worker_lifecycle_proto_rawDesc = "" +
 	"LEVEL_INFO\x10\x02\x12\x0e\n" +
 	"\n" +
 	"LEVEL_WARN\x10\x03\x12\x0f\n" +
-	"\vLEVEL_ERROR\x10\x04\"\xdf\x04\n" +
+	"\vLEVEL_ERROR\x10\x04\"\x94\x04\n" +
 	"\x10TaskStreamResult\x12;\n" +
-	"\x06status\x18\x01 \x01(\x0e2#.codegen.v1.TaskStreamResult.StatusR\x06status\x12C\n" +
-	"\aoutputs\x18\x02 \x03(\v2).codegen.v1.TaskStreamResult.OutputsEntryR\aoutputs\x12\x1c\n" +
+	"\x06status\x18\x01 \x01(\x0e2#.codegen.v1.TaskStreamResult.StatusR\x06status\x124\n" +
+	"\bresponse\x18\x02 \x01(\v2\x18.codegen.v1.ToolResponseR\bresponse\x12\x1c\n" +
 	"\tartifacts\x18\x03 \x03(\tR\tartifacts\x12=\n" +
 	"\bmetadata\x18\x04 \x01(\v2!.codegen.v1.TaskExecutionMetadataR\bmetadata\x12\x1a\n" +
 	"\bsequence\x18\x05 \x01(\x04R\bsequence\x12\\\n" +
-	"\x10session_metadata\x18\x06 \x03(\v21.codegen.v1.TaskStreamResult.SessionMetadataEntryR\x0fsessionMetadata\x1a:\n" +
-	"\fOutputsEntry\x12\x10\n" +
-	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\x1aB\n" +
+	"\x10session_metadata\x18\x06 \x03(\v21.codegen.v1.TaskStreamResult.SessionMetadataEntryR\x0fsessionMetadata\x1aB\n" +
 	"\x14SessionMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"r\n" +
@@ -1853,7 +1838,7 @@ func file_api_proto_v1_worker_lifecycle_proto_rawDescGZIP() []byte {
 }
 
 var file_api_proto_v1_worker_lifecycle_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_api_proto_v1_worker_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
+var file_api_proto_v1_worker_lifecycle_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_api_proto_v1_worker_lifecycle_proto_goTypes = []any{
 	(WorkerStatus_State)(0),       // 0: codegen.v1.WorkerStatus.State
 	(TaskLogEntry_Level)(0),       // 1: codegen.v1.TaskLogEntry.Level
@@ -1879,48 +1864,48 @@ var file_api_proto_v1_worker_lifecycle_proto_goTypes = []any{
 	(*SessionCreateRequest)(nil),  // 21: codegen.v1.SessionCreateRequest
 	(*SessionCreateResponse)(nil), // 22: codegen.v1.SessionCreateResponse
 	nil,                           // 23: codegen.v1.WorkerCapabilities.MetadataEntry
-	nil,                           // 24: codegen.v1.TaskAssignment.ArgumentsEntry
-	nil,                           // 25: codegen.v1.TaskStreamResult.OutputsEntry
-	nil,                           // 26: codegen.v1.TaskStreamResult.SessionMetadataEntry
-	nil,                           // 27: codegen.v1.SessionCreateRequest.EnvVarsEntry
-	nil,                           // 28: codegen.v1.SessionCreateRequest.MetadataEntry
-	nil,                           // 29: codegen.v1.SessionCreateResponse.MetadataEntry
-	(*ResourceLimits)(nil),        // 30: codegen.v1.ResourceLimits
-	(*SessionInfo)(nil),           // 31: codegen.v1.SessionInfo
-	(*ResourceUsage)(nil),         // 32: codegen.v1.ResourceUsage
-	(*TaskContext)(nil),           // 33: codegen.v1.TaskContext
-	(*ExecutionConstraints)(nil),  // 34: codegen.v1.ExecutionConstraints
+	nil,                           // 24: codegen.v1.TaskStreamResult.SessionMetadataEntry
+	nil,                           // 25: codegen.v1.SessionCreateRequest.EnvVarsEntry
+	nil,                           // 26: codegen.v1.SessionCreateRequest.MetadataEntry
+	nil,                           // 27: codegen.v1.SessionCreateResponse.MetadataEntry
+	(*ResourceLimits)(nil),        // 28: codegen.v1.ResourceLimits
+	(*SessionInfo)(nil),           // 29: codegen.v1.SessionInfo
+	(*ResourceUsage)(nil),         // 30: codegen.v1.ResourceUsage
+	(*ToolRequest)(nil),           // 31: codegen.v1.ToolRequest
+	(*TaskContext)(nil),           // 32: codegen.v1.TaskContext
+	(*ExecutionConstraints)(nil),  // 33: codegen.v1.ExecutionConstraints
+	(*ToolResponse)(nil),          // 34: codegen.v1.ToolResponse
 }
 var file_api_proto_v1_worker_lifecycle_proto_depIdxs = []int32{
 	4,  // 0: codegen.v1.RegisterRequest.capabilities:type_name -> codegen.v1.WorkerCapabilities
-	30, // 1: codegen.v1.RegisterRequest.limits:type_name -> codegen.v1.ResourceLimits
+	28, // 1: codegen.v1.RegisterRequest.limits:type_name -> codegen.v1.ResourceLimits
 	23, // 2: codegen.v1.WorkerCapabilities.metadata:type_name -> codegen.v1.WorkerCapabilities.MetadataEntry
 	8,  // 3: codegen.v1.HeartbeatRequest.status:type_name -> codegen.v1.WorkerStatus
 	7,  // 4: codegen.v1.HeartbeatRequest.capacity:type_name -> codegen.v1.SessionCapacity
-	31, // 5: codegen.v1.SessionCapacity.sessions:type_name -> codegen.v1.SessionInfo
+	29, // 5: codegen.v1.SessionCapacity.sessions:type_name -> codegen.v1.SessionInfo
 	0,  // 6: codegen.v1.WorkerStatus.state:type_name -> codegen.v1.WorkerStatus.State
-	32, // 7: codegen.v1.WorkerStatus.current_usage:type_name -> codegen.v1.ResourceUsage
+	30, // 7: codegen.v1.WorkerStatus.current_usage:type_name -> codegen.v1.ResourceUsage
 	13, // 8: codegen.v1.TaskStreamMessage.assignment:type_name -> codegen.v1.TaskAssignment
 	14, // 9: codegen.v1.TaskStreamMessage.response:type_name -> codegen.v1.TaskStreamResponse
 	20, // 10: codegen.v1.TaskStreamMessage.keepalive:type_name -> codegen.v1.StreamKeepAlive
 	21, // 11: codegen.v1.TaskStreamMessage.session_create:type_name -> codegen.v1.SessionCreateRequest
 	22, // 12: codegen.v1.TaskStreamMessage.session_created:type_name -> codegen.v1.SessionCreateResponse
-	24, // 13: codegen.v1.TaskAssignment.arguments:type_name -> codegen.v1.TaskAssignment.ArgumentsEntry
-	33, // 14: codegen.v1.TaskAssignment.context:type_name -> codegen.v1.TaskContext
-	34, // 15: codegen.v1.TaskAssignment.constraints:type_name -> codegen.v1.ExecutionConstraints
+	31, // 13: codegen.v1.TaskAssignment.request:type_name -> codegen.v1.ToolRequest
+	32, // 14: codegen.v1.TaskAssignment.context:type_name -> codegen.v1.TaskContext
+	33, // 15: codegen.v1.TaskAssignment.constraints:type_name -> codegen.v1.ExecutionConstraints
 	15, // 16: codegen.v1.TaskStreamResponse.progress:type_name -> codegen.v1.TaskProgressUpdate
 	16, // 17: codegen.v1.TaskStreamResponse.log:type_name -> codegen.v1.TaskLogEntry
 	17, // 18: codegen.v1.TaskStreamResponse.result:type_name -> codegen.v1.TaskStreamResult
 	19, // 19: codegen.v1.TaskStreamResponse.error:type_name -> codegen.v1.TaskStreamError
 	1,  // 20: codegen.v1.TaskLogEntry.level:type_name -> codegen.v1.TaskLogEntry.Level
 	2,  // 21: codegen.v1.TaskStreamResult.status:type_name -> codegen.v1.TaskStreamResult.Status
-	25, // 22: codegen.v1.TaskStreamResult.outputs:type_name -> codegen.v1.TaskStreamResult.OutputsEntry
+	34, // 22: codegen.v1.TaskStreamResult.response:type_name -> codegen.v1.ToolResponse
 	18, // 23: codegen.v1.TaskStreamResult.metadata:type_name -> codegen.v1.TaskExecutionMetadata
-	26, // 24: codegen.v1.TaskStreamResult.session_metadata:type_name -> codegen.v1.TaskStreamResult.SessionMetadataEntry
-	32, // 25: codegen.v1.TaskExecutionMetadata.peak_usage:type_name -> codegen.v1.ResourceUsage
-	27, // 26: codegen.v1.SessionCreateRequest.env_vars:type_name -> codegen.v1.SessionCreateRequest.EnvVarsEntry
-	28, // 27: codegen.v1.SessionCreateRequest.metadata:type_name -> codegen.v1.SessionCreateRequest.MetadataEntry
-	29, // 28: codegen.v1.SessionCreateResponse.metadata:type_name -> codegen.v1.SessionCreateResponse.MetadataEntry
+	24, // 24: codegen.v1.TaskStreamResult.session_metadata:type_name -> codegen.v1.TaskStreamResult.SessionMetadataEntry
+	30, // 25: codegen.v1.TaskExecutionMetadata.peak_usage:type_name -> codegen.v1.ResourceUsage
+	25, // 26: codegen.v1.SessionCreateRequest.env_vars:type_name -> codegen.v1.SessionCreateRequest.EnvVarsEntry
+	26, // 27: codegen.v1.SessionCreateRequest.metadata:type_name -> codegen.v1.SessionCreateRequest.MetadataEntry
+	27, // 28: codegen.v1.SessionCreateResponse.metadata:type_name -> codegen.v1.SessionCreateResponse.MetadataEntry
 	3,  // 29: codegen.v1.WorkerLifecycle.RegisterWorker:input_type -> codegen.v1.RegisterRequest
 	6,  // 30: codegen.v1.WorkerLifecycle.Heartbeat:input_type -> codegen.v1.HeartbeatRequest
 	10, // 31: codegen.v1.WorkerLifecycle.DeregisterWorker:input_type -> codegen.v1.DeregisterRequest
@@ -1943,6 +1928,7 @@ func file_api_proto_v1_worker_lifecycle_proto_init() {
 	}
 	file_api_proto_v1_common_proto_init()
 	file_api_proto_v1_task_execution_proto_init()
+	file_api_proto_v1_tools_proto_init()
 	file_api_proto_v1_worker_lifecycle_proto_msgTypes[9].OneofWrappers = []any{
 		(*TaskStreamMessage_Assignment)(nil),
 		(*TaskStreamMessage_Response)(nil),
@@ -1962,7 +1948,7 @@ func file_api_proto_v1_worker_lifecycle_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_worker_lifecycle_proto_rawDesc), len(file_api_proto_v1_worker_lifecycle_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   27,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

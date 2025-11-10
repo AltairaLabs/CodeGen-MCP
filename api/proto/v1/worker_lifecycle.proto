@@ -4,6 +4,7 @@ package codegen.v1;
 
 import "api/proto/v1/common.proto";
 import "api/proto/v1/task_execution.proto";
+import "api/proto/v1/tools.proto";
 
 option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
 
@@ -107,11 +108,10 @@ message TaskStreamMessage {
 message TaskAssignment {
   string task_id = 1;
   string session_id = 2;
-  string tool_name = 3;
-  map<string, string> arguments = 4;
-  TaskContext context = 5;
-  ExecutionConstraints constraints = 6;
-  uint64 sequence = 7;             // Monotonic sequence number for deduplication (0 = no tracking)
+  ToolRequest request = 3;         // Strongly-typed tool request
+  TaskContext context = 4;
+  ExecutionConstraints constraints = 5;
+  uint64 sequence = 6;             // Monotonic sequence number for deduplication (0 = no tracking)
 }
 
 // TaskStreamResponse is sent by worker to coordinator
@@ -154,7 +154,7 @@ message TaskStreamResult {
     STATUS_CANCELLED = 4;
   }
   Status status = 1;
-  map<string, string> outputs = 2;
+  ToolResponse response = 2;                  // Strongly-typed tool response
   repeated string artifacts = 3;
   TaskExecutionMetadata metadata = 4;
   uint64 sequence = 5;                        // Sequence number of completed task (for deduplication tracking)
