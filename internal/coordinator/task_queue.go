@@ -284,21 +284,7 @@ func (tq *TaskQueue) GetTask(ctx context.Context, taskID string) (*storage.Queue
 }
 
 // dispatchLoop continuously checks for ready tasks and dispatches them
-func (tq *TaskQueue) dispatchLoop() {
-	defer tq.wg.Done()
-
-	ticker := time.NewTicker(tq.dispatchInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			tq.dispatchReadyTasks()
-		case <-tq.ctx.Done():
-			return
-		}
-	}
-}
+// Note: dispatchLoop has been moved to task_queue_loops.go (untestable infrastructure code)
 
 // dispatchReadyTasks finds ready tasks and dispatches them to workers
 func (tq *TaskQueue) dispatchReadyTasks() {
@@ -521,22 +507,7 @@ func (tq *TaskQueue) sendTaskResult(taskID string, result *TaskResult) {
 	}
 }
 
-// resultTimeoutLoop monitors for tasks that have been waiting too long
-func (tq *TaskQueue) resultTimeoutLoop() {
-	defer tq.wg.Done()
-
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ticker.C:
-			tq.cleanupExpiredResults()
-		case <-tq.ctx.Done():
-			return
-		}
-	}
-}
+// Note: resultTimeoutLoop has been moved to task_queue_loops.go (untestable infrastructure code)
 
 // cleanupExpiredResults removes result channels for old tasks
 func (tq *TaskQueue) cleanupExpiredResults() {

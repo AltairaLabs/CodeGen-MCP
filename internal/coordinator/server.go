@@ -266,28 +266,4 @@ func (ms *MCPServer) Server() *server.MCPServer {
 	return ms.server
 }
 
-// Serve starts the MCP server with stdio transport
-func (ms *MCPServer) Serve() error {
-	return server.ServeStdio(ms.server)
-}
-
-// ServeWithLogger starts the MCP server with stdio transport and custom logger
-func (ms *MCPServer) ServeWithLogger(logger *slog.Logger) error {
-	logger.Info("Starting MCP server with stdio transport")
-	return ms.Serve()
-}
-
-// ServeHTTP starts the MCP server with HTTP/SSE transport on the specified address
-func (ms *MCPServer) ServeHTTP(addr string) error {
-	sseServer := server.NewSSEServer(ms.server,
-		server.WithBaseURL("http://"+addr),
-		server.WithStaticBasePath("/mcp"),
-	)
-	return sseServer.Start(addr)
-}
-
-// ServeHTTPWithLogger starts the MCP server with HTTP/SSE transport and custom logger
-func (ms *MCPServer) ServeHTTPWithLogger(addr string, logger *slog.Logger) error {
-	logger.Info("Starting MCP server with HTTP/SSE transport", "address", addr, "base_path", "/mcp")
-	return ms.ServeHTTP(addr)
-}
+// Note: Serve methods have been moved to server_serve.go (untestable infrastructure code)

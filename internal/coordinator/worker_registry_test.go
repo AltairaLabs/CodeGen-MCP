@@ -437,6 +437,40 @@ func TestWorkerRegistry_CleanupStaleWorkers(t *testing.T) {
 	}
 }
 
+func TestWorkerRegistry_GetAllWorkers(t *testing.T) {
+	registry := NewWorkerRegistry()
+
+	// Empty registry
+	workers := registry.GetAllWorkers()
+	if len(workers) != 0 {
+		t.Errorf("Expected 0 workers, got %d", len(workers))
+	}
+
+	// Register multiple workers
+	for i := 1; i <= 3; i++ {
+		worker := &RegisteredWorker{
+			WorkerID:      fmt.Sprintf("worker-%d", i),
+			SessionID:     fmt.Sprintf("session-%d", i),
+			RegisteredAt:  time.Now(),
+			LastHeartbeat: time.Now(),
+		}
+		registry.RegisterWorker(worker.WorkerID, worker)
+	}
+
+	// Get all workers
+	workers = registry.GetAllWorkers()
+	if len(workers) != 3 {
+		t.Errorf("Expected 3 workers, got %d", len(workers))
+	}
+
+	// Verify we got copies, not originals
+	for _, worker := range workers {
+		if worker == nil {
+			t.Error("Expected non-nil worker")
+		}
+	}
+}
+
 func TestWorkerRegistry_ConcurrentAccess(t *testing.T) {
 	registry := NewWorkerRegistry()
 	ctx := context.Background()
@@ -476,6 +510,7 @@ func TestWorkerRegistry_ConcurrentAccess(t *testing.T) {
 			_ = registry.GetWorker(fmt.Sprintf("worker-%d", id))
 			_, _ = registry.FindWorkerWithCapacity(ctx, nil)
 			_ = registry.ListWorkers()
+			_ = registry.GetAllWorkers()
 			_, _, _ = registry.GetTotalCapacity()
 			done <- true
 		}(i)

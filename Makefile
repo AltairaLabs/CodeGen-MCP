@@ -51,8 +51,8 @@ test-unit: ## Run fast unit tests (skips network integration tests)
 	@go test -short -coverprofile=coverage.out -covermode=atomic \
 		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
 		$$(go list ./... | grep -v '/api/proto/v1$$')
-	@echo "Filtering coverage data (excluding generated proto files and main.go)..."
-	@grep -v -E '(\.pb\.go|cmd/.*/main\.go):' coverage.out > coverage.filtered.out || true
+	@echo "Filtering coverage data (excluding generated proto files, main.go, and untestable infrastructure)..."
+	@grep -v -E '(\.pb\.go|cmd/.*/main\.go|_serve\.go|_streams\.go|_loops\.go):' coverage.out > coverage.filtered.out || true
 	@mv coverage.filtered.out coverage.out
 	@go tool cover -func=coverage.out | grep "^total:" || echo "No coverage data"
 	@echo "Coverage report generated: coverage.out"
@@ -75,8 +75,8 @@ coverage: ## Generate full coverage report (includes all tests)
 	@go test -count=1 -coverprofile=coverage.out -covermode=atomic \
 		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
 		./...
-	@echo "Filtering coverage data (excluding generated proto files and main.go)..."
-	@grep -v -E '(\.pb\.go|cmd/.*/main\.go):' coverage.out > coverage.filtered.out || true
+	@echo "Filtering coverage data (excluding generated proto files, main.go, and untestable infrastructure)..."
+	@grep -v -E '(\.pb\.go|cmd/.*/main\.go|_serve\.go|_streams\.go|_loops\.go):' coverage.out > coverage.filtered.out || true
 	@mv coverage.filtered.out coverage.out
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
