@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
 )
 
@@ -88,7 +87,7 @@ func TestEnqueue(t *testing.T) {
 				ID:        "task1",
 				SessionID: "session1",
 				ToolName:  "read_file",
-				Args:      coordinator.TaskArgs{"path": "/test"},
+				Args:      storage.TaskArgs{"path": "/test"},
 				State:     storage.TaskStateQueued,
 				CreatedAt: time.Now(),
 			},

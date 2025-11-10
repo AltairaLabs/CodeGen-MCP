@@ -22,6 +22,10 @@ func (m *MockTaskQueue) EnqueueTask(ctx context.Context, sessionID, toolName str
 	return "mock-task-id", nil
 }
 
+func (m *MockTaskQueue) EnqueueTypedTask(ctx context.Context, sessionID string, request *protov1.ToolRequest) (string, error) {
+	return "mock-task-id", nil
+}
+
 func (m *MockTaskQueue) GetTaskResult(ctx context.Context, taskID string) (*TaskResult, error) {
 	// For mock, we need to actually execute the task synchronously
 	// This is a simplified version that doesn't do the full async flow
@@ -30,6 +34,21 @@ func (m *MockTaskQueue) GetTaskResult(ctx context.Context, taskID string) (*Task
 		Output: "mock result",
 		Error:  "",
 	}, nil
+}
+
+func (m *MockTaskQueue) GetTask(ctx context.Context, taskID string) (*storage.QueuedTask, error) {
+	return &storage.QueuedTask{
+		ID:        taskID,
+		SessionID: "test-session",
+		ToolName:  "echo",
+		Sequence:  1,
+		State:     storage.TaskStateQueued,
+		CreatedAt: time.Now(),
+	}, nil
+}
+
+func (m *MockTaskQueue) SetResultStreamer(streamer *ResultStreamer) {
+	// No-op for mock
 }
 
 func (m *MockTaskQueue) Start() {
@@ -50,9 +69,29 @@ func newTestTaskQueue(sm *SessionManager, worker WorkerClient, logger *slog.Logg
 // Test handleEcho directly by calling it as a method
 func TestHandleEcho(t *testing.T) {
 	storage := newTestSessionStorage()
-	sm := NewSessionManager(storage, nil)
-	worker := NewMockWorkerClient()
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+
+	// Create worker registry and register a mock worker
+	registry := NewWorkerRegistry()
+	mockWorker := &RegisteredWorker{
+		WorkerID:              "test-worker",
+		SessionID:             "reg-test-worker",
+		PendingTasks:          make(map[string]*PendingTask),
+		PendingSessionCreates: make(map[string]chan *protov1.SessionCreateResponse),
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     10,
+			ActiveSessions:    0,
+			AvailableSessions: 10,
+		},
+		LastHeartbeat: time.Now(),
+		RegisteredAt:  time.Now(),
+	}
+	registry.mu.Lock()
+	registry.workers["test-worker"] = mockWorker
+	registry.mu.Unlock()
+
+	sm := NewSessionManager(storage, registry)
+	worker := NewMockWorkerClient()
 	audit := NewAuditLogger(logger)
 
 	cfg := Config{

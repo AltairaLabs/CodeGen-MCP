@@ -148,7 +148,7 @@ func (r *RealWorkerClient) ExecuteTask(
 				finalResult = payload.Result
 
 				// Sync session metadata from worker (worker is master)
-				if finalResult.SessionMetadata != nil && len(finalResult.SessionMetadata) > 0 {
+				if len(finalResult.SessionMetadata) > 0 {
 					if err := r.sessionManager.storage.SetSessionMetadata(ctx, session.ID, finalResult.SessionMetadata); err != nil {
 						r.logger.WarnContext(ctx, "Failed to sync session metadata from worker",
 							"session_id", session.ID,
@@ -276,11 +276,11 @@ func (r *RealWorkerClient) ExecuteTypedTask(
 				finalResult = payload.Result
 
 				// Sync session metadata
-				if finalResult.SessionMetadata != nil && len(finalResult.SessionMetadata) > 0 {
-					if err := r.sessionManager.storage.SetSessionMetadata(ctx, session.ID, finalResult.SessionMetadata); err != nil {
+				if len(finalResult.SessionMetadata) > 0 {
+					if syncErr := r.sessionManager.storage.SetSessionMetadata(ctx, session.ID, finalResult.SessionMetadata); syncErr != nil {
 						r.logger.WarnContext(ctx, "Failed to sync session metadata from worker",
 							"session_id", session.ID,
-							"error", err,
+							"error", syncErr,
 						)
 					}
 				}

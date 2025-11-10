@@ -8,6 +8,13 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+const (
+	testUserID   = "test-user"
+	testTaskID   = "task-1"
+	testActiveID = "active-task"
+	testStatusID = "status-task"
+)
+
 type mockTaskStream struct {
 	responses []*protov1.TaskResponse
 }
@@ -26,19 +33,24 @@ func (m *mockTaskStream) RecvMsg(interface{}) error    { return nil }
 
 func TestTaskExecutorExecute(t *testing.T) {
 	baseWorkspace := t.TempDir()
-	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
+	pool := newTestSessionPool(testWorkerID, 5, baseWorkspace)
 	executor := NewTaskExecutor(pool)
 
 	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
 		WorkspaceId: "test",
-		UserId:      "test-user",
+		UserId:      testUserID,
 	})
 
 	req := &protov1.TaskRequest{
-		TaskId:    "task-1",
+		TaskId:    testTaskID,
 		SessionId: sessionResp.SessionId,
-		ToolName:  "echo",
-		Arguments: map[string]string{"message": "hello"},
+		TypedRequest: &protov1.ToolRequest{
+			Request: &protov1.ToolRequest_Echo{
+				Echo: &protov1.EchoRequest{
+					Message: "hello",
+				},
+			},
+		},
 	}
 
 	stream := &mockTaskStream{}
@@ -55,7 +67,7 @@ func TestTaskExecutorExecute(t *testing.T) {
 	session, _ := pool.GetSession(sessionResp.SessionId)
 	found := false
 	for _, taskID := range session.RecentTasks {
-		if taskID == "task-1" {
+		if taskID == testTaskID {
 			found = true
 			break
 		}
@@ -91,8 +103,13 @@ func TestTaskExecutorExecuteInvalidSession(t *testing.T) {
 	req := &protov1.TaskRequest{
 		TaskId:    "task-1",
 		SessionId: "non-existent-session",
-		ToolName:  "echo",
-		Arguments: map[string]string{"message": "hello"},
+		TypedRequest: &protov1.ToolRequest{
+			Request: &protov1.ToolRequest_Echo{
+				Echo: &protov1.EchoRequest{
+					Message: "hello",
+				},
+			},
+		},
 	}
 
 	stream := &mockTaskStream{}
@@ -179,8 +196,13 @@ func TestTaskExecutorExecuteToolInSession(t *testing.T) {
 	req := &protov1.TaskRequest{
 		TaskId:    "test-read",
 		SessionId: sessionResp.SessionId,
-		ToolName:  "fs.read",
-		Arguments: map[string]string{"path": "nonexistent.txt"},
+		TypedRequest: &protov1.ToolRequest{
+			Request: &protov1.ToolRequest_FsRead{
+				FsRead: &protov1.FsReadRequest{
+					Path: "nonexistent.txt",
+				},
+			},
+		},
 	}
 
 	stream := &mockTaskStream{}
@@ -193,8 +215,13 @@ func TestTaskExecutorExecuteToolInSession(t *testing.T) {
 	req2 := &protov1.TaskRequest{
 		TaskId:    "test-list",
 		SessionId: sessionResp.SessionId,
-		ToolName:  "fs.list",
-		Arguments: map[string]string{"path": "."},
+		TypedRequest: &protov1.ToolRequest{
+			Request: &protov1.ToolRequest_FsList{
+				FsList: &protov1.FsListRequest{
+					Path: ".",
+				},
+			},
+		},
 	}
 
 	_, err = executor.executeToolInSession(context.Background(), session, req2, stream)
