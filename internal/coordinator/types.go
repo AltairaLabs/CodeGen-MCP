@@ -182,6 +182,32 @@ func (p RetryPolicy) CalculateNextRetryTime(retryCount int) time.Time {
 }
 
 // IsRetryableError determines if an error should trigger a retry
+func isNetworkError(errMsg string) bool {
+	return contains(errMsg, "connection refused") ||
+		contains(errMsg, "connection reset") ||
+		contains(errMsg, "timeout") ||
+		contains(errMsg, "EOF") ||
+		contains(errMsg, "broken pipe") ||
+		contains(errMsg, "network is unreachable")
+}
+
+func isWorkerUnavailableError(errMsg string) bool {
+	return contains(errMsg, "worker not found") ||
+		contains(errMsg, "worker unavailable") ||
+		contains(errMsg, "no workers available")
+}
+
+func isPermanentError(errMsg string) bool {
+	return contains(errMsg, "validation failed") ||
+		contains(errMsg, "invalid argument") ||
+		contains(errMsg, "missing required field") ||
+		contains(errMsg, "metadata validation failed") ||
+		contains(errMsg, "permission denied") ||
+		contains(errMsg, "not found") ||
+		contains(errMsg, "unauthorized") ||
+		contains(errMsg, "forbidden")
+}
+
 func IsRetryableError(err error) bool {
 	if err == nil {
 		return false
@@ -189,33 +215,12 @@ func IsRetryableError(err error) bool {
 
 	errMsg := err.Error()
 
-	// Network errors are retryable
-	if contains(errMsg, "connection refused") ||
-		contains(errMsg, "connection reset") ||
-		contains(errMsg, "timeout") ||
-		contains(errMsg, "EOF") ||
-		contains(errMsg, "broken pipe") ||
-		contains(errMsg, "network is unreachable") {
-		return true
-	}
-
-	// Worker unavailable errors are retryable
-	if contains(errMsg, "worker not found") ||
-		contains(errMsg, "worker unavailable") ||
-		contains(errMsg, "no workers available") {
-		return true
-	}
-
-	// Permanent errors are NOT retryable
-	if contains(errMsg, "validation failed") ||
-		contains(errMsg, "invalid argument") ||
-		contains(errMsg, "missing required field") ||
-		contains(errMsg, "metadata validation failed") ||
-		contains(errMsg, "permission denied") ||
-		contains(errMsg, "not found") ||
-		contains(errMsg, "unauthorized") ||
-		contains(errMsg, "forbidden") {
+	if isPermanentError(errMsg) {
 		return false
+	}
+
+	if isNetworkError(errMsg) || isWorkerUnavailableError(errMsg) {
+		return true
 	}
 
 	// Default: transient errors are retryable

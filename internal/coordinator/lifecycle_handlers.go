@@ -285,24 +285,106 @@ func (cs *CoordinatorServer) StartCleanupLoop(ctx context.Context, interval time
 
 // TaskStream handles the bidirectional stream for task assignment
 // Worker opens this stream and coordinator sends tasks over it
+func (cs *CoordinatorServer) identifyWorkerByTaskResponse(taskID string, stream protov1.WorkerLifecycle_TaskStreamServer) (string, *RegisteredWorker) {
+	cs.workerRegistry.mu.RLock()
+	defer cs.workerRegistry.mu.RUnlock()
+
+	for _, w := range cs.workerRegistry.workers {
+		w.mu.RLock()
+		if _, ok := w.PendingTasks[taskID]; ok {
+			workerID := w.WorkerID
+			w.mu.RUnlock()
+
+			w.mu.Lock()
+			w.TaskStream = stream
+			w.mu.Unlock()
+
+			cs.logger.Info("Associated stream with worker via task response", "worker_id", workerID)
+			return workerID, w
+		}
+		w.mu.RUnlock()
+	}
+	return "", nil
+}
+
+func (cs *CoordinatorServer) identifyWorkerByKeepalive(stream protov1.WorkerLifecycle_TaskStreamServer) (string, *RegisteredWorker) {
+	cs.workerRegistry.mu.RLock()
+	var candidates []*RegisteredWorker
+	for _, w := range cs.workerRegistry.workers {
+		w.mu.RLock()
+		if w.TaskStream == nil {
+			candidates = append(candidates, w)
+		}
+		w.mu.RUnlock()
+	}
+	cs.workerRegistry.mu.RUnlock()
+
+	if len(candidates) == 1 {
+		worker := candidates[0]
+		worker.mu.Lock()
+		worker.TaskStream = stream
+		worker.mu.Unlock()
+		cs.logger.Info("Associated stream with worker via keepalive", "worker_id", worker.WorkerID)
+		return worker.WorkerID, worker
+	}
+
+	if len(candidates) > 1 {
+		cs.logger.Warn("Multiple workers without streams, cannot identify worker from keepalive alone", "candidate_count", len(candidates))
+	} else {
+		cs.logger.Warn("Received keepalive but all workers already have streams")
+	}
+	return "", nil
+}
+
+func (cs *CoordinatorServer) handleStreamMessage(
+	ctx context.Context,
+	msg *protov1.TaskStreamMessage,
+	workerID *string,
+	worker **RegisteredWorker,
+	stream protov1.WorkerLifecycle_TaskStreamServer,
+) {
+	switch payload := msg.Message.(type) {
+	case *protov1.TaskStreamMessage_Response:
+		if *workerID == "" {
+			newID, newWorker := cs.identifyWorkerByTaskResponse(payload.Response.TaskId, stream)
+			if newID == "" {
+				cs.logger.Error("Could not identify worker for task response", "task_id", payload.Response.TaskId)
+				return
+			}
+			*workerID = newID
+			*worker = newWorker
+		}
+		cs.handleTaskStreamResponse(ctx, *workerID, payload.Response)
+
+	case *protov1.TaskStreamMessage_Keepalive:
+		if *workerID == "" {
+			newID, newWorker := cs.identifyWorkerByKeepalive(stream)
+			if newID != "" {
+				*workerID = newID
+				*worker = newWorker
+			}
+		} else {
+			cs.logger.Debug("Received keepalive from worker", "worker_id", *workerID)
+		}
+
+	case *protov1.TaskStreamMessage_SessionCreated:
+		cs.handleSessionCreated(ctx, payload.SessionCreated, workerID, worker, stream)
+
+	default:
+		cs.logger.Warn("Unknown task stream message type")
+	}
+}
+
 func (cs *CoordinatorServer) TaskStream(stream protov1.WorkerLifecycle_TaskStreamServer) error {
 	ctx := stream.Context()
-
-	// TODO: In production, first message should be worker authentication
-	// For now, we'll wait for the initial keepalive to identify the worker
-	// This is a temporary workaround - we need proper authentication
-
 	cs.logger.Info("Worker task stream connected, waiting for identification")
 
 	var workerID string
 	var worker *RegisteredWorker
 
-	// Create a channel for receiving messages asynchronously
-	// This allows us to properly handle context cancellation
 	msgChan := make(chan *protov1.TaskStreamMessage, 10)
 	errChan := make(chan error, 1)
 
-	// Start goroutine to receive messages
 	go func() {
 		for {
 			msg, err := stream.Recv()
@@ -314,7 +396,6 @@ func (cs *CoordinatorServer) TaskStream(stream protov1.WorkerLifecycle_TaskStrea
 		}
 	}()
 
-	// Cleanup function
 	defer func() {
 		if worker != nil {
 			worker.mu.Lock()
@@ -323,7 +404,6 @@ func (cs *CoordinatorServer) TaskStream(stream protov1.WorkerLifecycle_TaskStrea
 		}
 	}()
 
-	// Keep stream alive and handle incoming messages
 	for {
 		select {
 		case <-ctx.Done():
@@ -335,162 +415,73 @@ func (cs *CoordinatorServer) TaskStream(stream protov1.WorkerLifecycle_TaskStrea
 			return err
 
 		case msg := <-msgChan:
-			// Handle different message types
-			switch payload := msg.Message.(type) {
-			case *protov1.TaskStreamMessage_Response:
-				// Worker sending task response
-				// If worker not yet identified, try to identify by pending task
-				if workerID == "" {
-					taskID := payload.Response.TaskId
-					cs.workerRegistry.mu.RLock()
-					for _, w := range cs.workerRegistry.workers {
-						w.mu.RLock()
-						if _, ok := w.PendingTasks[taskID]; ok {
-							workerID = w.WorkerID
-							worker = w
-							w.mu.RUnlock()
-							break
-						}
-						w.mu.RUnlock()
-					}
-					cs.workerRegistry.mu.RUnlock()
+			cs.handleStreamMessage(ctx, msg, &workerID, &worker, stream)
+		}
+	}
+}
 
-					if workerID == "" {
-						cs.logger.Error("Could not identify worker for task response", "task_id", taskID)
-						continue
-					}
+func (cs *CoordinatorServer) handleSessionCreated(
+	ctx context.Context,
+	resp *protov1.SessionCreateResponse,
+	workerID *string,
+	worker **RegisteredWorker,
+	stream protov1.WorkerLifecycle_TaskStreamServer,
+) {
+	// If worker not yet identified, try to identify by the session id in pending maps
+	if *workerID == "" {
+		cs.workerRegistry.mu.RLock()
+		for _, w := range cs.workerRegistry.workers {
+			w.mu.RLock()
+			if _, ok := w.PendingSessionCreates[resp.SessionId]; ok {
+				*worker = w
+				*workerID = w.WorkerID
+				w.mu.RUnlock()
+				break
+			}
+			w.mu.RUnlock()
+		}
+		cs.workerRegistry.mu.RUnlock()
+		if *worker != nil {
+			(*worker).mu.Lock()
+			(*worker).TaskStream = stream
+			(*worker).mu.Unlock()
+			cs.logger.Info("Associated stream with worker via session create response", "worker_id", *workerID)
+		}
+	}
 
-					// Store stream reference in worker
-					worker.mu.Lock()
-					worker.TaskStream = stream
-					worker.mu.Unlock()
+	// Find coordinator session by worker session ID
+	allSessions := cs.sessionManager.GetAllSessions()
+	var coordSessionID string
+	for id, session := range allSessions {
+		if session.WorkerSessionID == resp.SessionId {
+			coordSessionID = id
+			break
+		}
+	}
 
-					cs.logger.Info("Associated stream with worker via task response", "worker_id", workerID)
-				}
+	if coordSessionID == "" {
+		return
+	}
 
-				cs.handleTaskStreamResponse(ctx, workerID, payload.Response)
+	if resp.Success {
+		if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateReady, ""); err == nil {
+			cs.logger.Info("Session ready on worker", "session_id", coordSessionID, "worker_session_id", resp.SessionId, "worker_id", *workerID)
+		}
+	} else {
+		if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateFailed, resp.Error); err == nil {
+			cs.logger.Error("Session creation failed on worker", "session_id", coordSessionID, "worker_session_id", resp.SessionId, "worker_id", *workerID, "error", resp.Error)
+		}
+	}
 
-			case *protov1.TaskStreamMessage_Keepalive:
-				// Keepalive message - use this to identify worker on first message
-				if workerID == "" {
-					// Find the most recently registered worker without a task stream
-					// This assumes workers connect their task stream shortly after registration
-					cs.workerRegistry.mu.RLock()
-					var candidates []*RegisteredWorker
-					for _, w := range cs.workerRegistry.workers {
-						w.mu.RLock()
-						if w.TaskStream == nil {
-							candidates = append(candidates, w)
-						}
-						w.mu.RUnlock()
-					}
-					cs.workerRegistry.mu.RUnlock()
-
-					if len(candidates) == 1 {
-						// Only one worker without a stream, must be this one
-						worker = candidates[0]
-						workerID = worker.WorkerID
-
-						worker.mu.Lock()
-						worker.TaskStream = stream
-						worker.mu.Unlock()
-
-						cs.logger.Info("Associated stream with worker via keepalive",
-							"worker_id", workerID,
-							"timestamp_ms", payload.Keepalive.TimestampMs)
-					} else if len(candidates) > 1 {
-						cs.logger.Warn("Multiple workers without streams, cannot identify worker from keepalive alone",
-							"candidate_count", len(candidates))
-					} else {
-						cs.logger.Warn("Received keepalive but all workers already have streams")
-					}
-				} else {
-					cs.logger.Debug("Received keepalive from worker", "worker_id", workerID)
-				}
-
-			case *protov1.TaskStreamMessage_SessionCreated:
-				// Worker responded to session create request
-				resp := payload.SessionCreated
-				// If worker not yet identified, try to identify by the session id in pending maps
-				if workerID == "" {
-					cs.workerRegistry.mu.RLock()
-					for _, w := range cs.workerRegistry.workers {
-						w.mu.RLock()
-						if _, ok := w.PendingSessionCreates[resp.SessionId]; ok {
-							worker = w
-							workerID = w.WorkerID
-							w.mu.RUnlock()
-							break
-						}
-						w.mu.RUnlock()
-					}
-					cs.workerRegistry.mu.RUnlock()
-					if worker != nil {
-						worker.mu.Lock()
-						worker.TaskStream = stream
-						worker.mu.Unlock()
-						cs.logger.Info("Associated stream with worker via session create response", "worker_id", workerID)
-					}
-				}
-
-				// Update session state based on worker response
-				if resp.Success {
-					// Find the coordinator session by worker session ID
-					// We need to look through sessions to find the one with this WorkerSessionID
-					allSessions := cs.sessionManager.GetAllSessions()
-					var coordSessionID string
-					for id, session := range allSessions {
-						if session.WorkerSessionID == resp.SessionId {
-							coordSessionID = id
-							break
-						}
-					}
-
-					if coordSessionID != "" {
-						if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateReady, ""); err == nil {
-							cs.logger.Info("Session ready on worker",
-								"session_id", coordSessionID,
-								"worker_session_id", resp.SessionId,
-								"worker_id", workerID)
-						}
-					}
-				} else {
-					// Session creation failed
-					allSessions := cs.sessionManager.GetAllSessions()
-					var coordSessionID string
-					for id, session := range allSessions {
-						if session.WorkerSessionID == resp.SessionId {
-							coordSessionID = id
-							break
-						}
-					}
-
-					if coordSessionID != "" {
-						if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateFailed, resp.Error); err == nil {
-							cs.logger.Error("Session creation failed on worker",
-								"session_id", coordSessionID,
-								"worker_session_id", resp.SessionId,
-								"worker_id", workerID,
-								"error", resp.Error)
-						}
-					}
-				}
-
-				// Route response to any waiting channel (for any legacy blocking code)
-				if worker != nil {
-					worker.mu.RLock()
-					ch, ok := worker.PendingSessionCreates[resp.SessionId]
-					worker.mu.RUnlock()
-					if ok {
-						select {
-						case ch <- resp:
-						default:
-						}
-					}
-				}
-
+	// Route response to waiting channel
+	if *worker != nil {
+		(*worker).mu.RLock()
+		ch, ok := (*worker).PendingSessionCreates[resp.SessionId]
+		(*worker).mu.RUnlock()
+		if ok {
+			select {
+			case ch <- resp:
 			default:
-				cs.logger.Warn("Unknown task stream message type")
 			}
 		}
 	}

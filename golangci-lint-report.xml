@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<checkstyle version="5.0">
+  <file name="cmd/coordinator/main.go">
+    <error column="1" line="34" message="cyclomatic complexity 18 of func `main` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="57" line="79" message="Magic number: 10000, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+  </file>
+  <file name="internal/coordinator/lifecycle_handlers.go">
+    <error column="1" line="288" message="cyclomatic complexity 36 of func `(*CoordinatorServer).TaskStream` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="1" line="500" message="The line is 131 characters long, which exceeds the maximum of 120 characters." severity="error" source="lll"></error>
+    <error column="40" line="330" message="`cancelled` is a misspelling of `canceled`" severity="error" source="misspell"></error>
+    <error column="51" line="302" message="Magic number: 10, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+  </file>
+  <file name="internal/coordinator/server.go">
+    <error column="1" line="60" message="The line is 141 characters long, which exceeds the maximum of 120 characters." severity="error" source="lll"></error>
+    <error column="41" line="70" message="Magic number: 1000000000, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+  </file>
+  <file name="internal/coordinator/session.go">
+    <error column="2" line="106" message="(*SessionManager).createWorkerSession - ctx is unused" severity="error" source="unparam"></error>
+  </file>
+  <file name="internal/coordinator/storage/memory/task_queue.go">
+    <error column="1" line="319" message="The line is 121 characters long, which exceeds the maximum of 120 characters." severity="error" source="lll"></error>
+    <error column="1" line="344" message="The line is 137 characters long, which exceeds the maximum of 120 characters." severity="error" source="lll"></error>
+  </file>
+  <file name="internal/coordinator/task_dispatcher.go">
+    <error column="24" line="19" message="importShadow: shadow of imported from &#39;github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage&#39; package &#39;storage&#39;" severity="error" source="gocritic"></error>
+  </file>
+  <file name="internal/coordinator/task_handlers.go">
+    <error column="1" line="13" message="The line is 121 characters long, which exceeds the maximum of 120 characters." severity="error" source="lll"></error>
+    <error column="1" line="47" message="The line is 121 characters long, which exceeds the maximum of 120 characters." severity="error" source="lll"></error>
+  </file>
+  <file name="internal/coordinator/task_queue.go">
+    <error column="2" line="18" message="deprecatedComment: `Deprecated: ` notices should be in a dedicated paragraph, separated from the rest" severity="error" source="gocritic"></error>
+    <error column="2" line="79" message="importShadow: shadow of imported from &#39;github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage&#39; package &#39;storage&#39;" severity="error" source="gocritic"></error>
+    <error column="1" line="9" message="File is not properly formatted" severity="error" source="goimports"></error>
+    <error column="21" line="72" message="Magic number: 100, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="21" line="73" message="Magic number: 10, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="15" line="147" message="Magic number: 5, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="15" line="149" message="Magic number: 2, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="17" line="207" message="Magic number: 5, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="17" line="209" message="Magic number: 2, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="27" line="528" message="Magic number: 30, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+  </file>
+  <file name="internal/coordinator/tool_echo.go">
+    <error column="1" line="10" message="File is not properly formatted" severity="error" source="goimports"></error>
+  </file>
+  <file name="internal/coordinator/tool_fs_list.go">
+    <error column="1" line="9" message="File is not properly formatted" severity="error" source="goimports"></error>
+  </file>
+  <file name="internal/coordinator/types.go">
+    <error column="1" line="185" message="cyclomatic complexity 19 of func `IsRetryableError` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="22" line="131" message="Magic number: 3, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="22" line="133" message="Magic number: 30, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="22" line="134" message="Magic number: 2.0, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="22" line="141" message="Magic number: 5, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="22" line="142" message="Magic number: 500, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="22" line="143" message="Magic number: 60, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="22" line="144" message="Magic number: 2.0, in &lt;assign&gt; detected" severity="error" source="mnd"></error>
+    <error column="49" line="177" message="Magic number: 1000, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="20" line="178" message="Magic number: 0.25, in &lt;operation&gt; detected" severity="error" source="mnd"></error>
+  </file>
+  <file name="internal/coordinator/worker.go">
+    <error column="1" line="78" message="cyclomatic complexity 18 of func `(*RealWorkerClient).ExecuteTask` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="1" line="215" message="cyclomatic complexity 17 of func `(*RealWorkerClient).ExecuteTypedTask` is high (&gt; 15)" severity="error" source="gocyclo"></error>
+    <error column="9" line="152" message="shadow: declaration of &#34;err&#34; shadows declaration at line 84" severity="error" source="govet"></error>
+    <error column="1" line="280" message="The line is 126 characters long, which exceeds the maximum of 120 characters." severity="error" source="lll"></error>
+    <error column="46" line="116" message="Magic number: 2, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="46" line="244" message="Magic number: 2, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="57" line="377" message="Magic number: 10, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="57" line="408" message="Magic number: 10, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="2" line="359" message="(*RealWorkerClient).sendTaskToWorker - ctx is unused" severity="error" source="unparam"></error>
+    <error column="2" line="361" message="(*RealWorkerClient).sendTaskToWorker - session is unused" severity="error" source="unparam"></error>
+    <error column="2" line="364" message="(*RealWorkerClient).sendTaskToWorker - workspaceID is unused" severity="error" source="unparam"></error>
+    <error column="2" line="365" message="(*RealWorkerClient).sendTaskToWorker - protoArgs is unused" severity="error" source="unparam"></error>
+    <error column="2" line="366" message="(*RealWorkerClient).sendTaskToWorker - sequence is unused" severity="error" source="unparam"></error>
+  </file>
+  <file name="internal/worker/checkpointer.go">
+    <error column="53" line="122" message="Magic number: 0644, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="53" line="184" message="Magic number: 0755, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="33" line="356" message="Magic number: 0755, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="50" line="362" message="Magic number: 0755, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+  </file>
+  <file name="internal/worker/client.go">
+    <error column="10" line="792" message="string `unknown` has 4 occurrences, make it a constant" severity="error" source="goconst"></error>
+  </file>
+  <file name="internal/worker/session_pool.go">
+    <error column="1" line="90" message="paramTypeCombine: func(ctx context.Context, sessionID, workspaceID, userID string, envVars map[string]string, metadata map[string]string) error could be replaced with func(ctx context.Context, sessionID, workspaceID, userID string, envVars, metadata map[string]string) error" severity="error" source="gocritic"></error>
+    <error column="2" line="126" message="S1031: unnecessary nil check around range" severity="error" source="staticcheck"></error>
+  </file>
+  <file name="internal/worker/tool_handlers_typed.go">
+    <error column="20" line="209" message="G115: integer overflow conversion int -&gt; int32" severity="error" source="gosec"></error>
+    <error column="19" line="238" message="G304: Potential file inclusion via variable" severity="error" source="gosec"></error>
+    <error column="57" line="134" message="Magic number: 0644, in &lt;argument&gt; detected" severity="error" source="mnd"></error>
+    <error column="6" line="253" message="ST1005: error strings should not be capitalized" severity="error" source="staticcheck"></error>
+    <error column="6" line="316" message="ST1005: error strings should not be capitalized" severity="error" source="staticcheck"></error>
+  </file>
+</checkstyle>

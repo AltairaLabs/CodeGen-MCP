@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"log/slog"
 	"net"
 	"os"
@@ -31,61 +30,43 @@ var (
 	httpMode = flag.Bool("http", false, "Enable HTTP/SSE transport instead of stdio")
 )
 
-func main() {
-	flag.Parse()
-
-	if *version {
-		fmt.Println("CodeGen MCP Coordinator v0.1.0")
-		os.Exit(0)
-	}
-
-	// Setup structured logging
+func setupLogger() *slog.Logger {
 	logLevel := slog.LevelInfo
 	if *debug {
 		logLevel = slog.LevelDebug
 	}
-
 	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{
 		Level: logLevel,
 	}))
 	slog.SetDefault(logger)
+	return logger
+}
 
-	// Read gRPC port from environment
-	grpcPort := os.Getenv("GRPC_PORT")
+func getPortConfig() (grpcPort, httpPort string) {
+	grpcPort = os.Getenv("GRPC_PORT")
 	if grpcPort == "" {
 		grpcPort = defaultGRPCPort
 	}
-
-	// Read HTTP port from environment (for HTTP/SSE mode)
-	httpPort := os.Getenv("HTTP_PORT")
+	httpPort = os.Getenv("HTTP_PORT")
 	if httpPort == "" {
 		httpPort = "8080"
 	}
+	return grpcPort, httpPort
+}
 
-	logger.Info("Starting CodeGen MCP Coordinator",
-		"version", "0.1.0",
-		"debug", *debug,
-		"grpc_port", grpcPort,
-		"http_mode", *httpMode,
-		"http_port", httpPort,
-	)
-
-	// Initialize components
-	// Storage backends are now required for session state management
-	// Using in-memory implementations - can be replaced with Redis/database backends
-	// Future: Add support for external storage backends via environment variables
-	// Example: STORAGE_BACKEND=redis STORAGE_URL=redis://localhost:6379
+func initializeComponents(logger *slog.Logger) (
+	*coordinator.TaskQueue,
+	*coordinator.MCPServer,
+	*coordinator.CoordinatorServer,
+	*coordinator.SessionManager,
+) {
 	var sessionStateStorage coordinator.SessionStateStorage = memory.NewInMemorySessionStateStorage()
-	taskQueueStorage := memory.NewInMemoryTaskQueueStorage(10000, 100) // max 10k total tasks, 100 per session
-
-	// WorkerRegistry uses in-memory state (TaskStream cannot be persisted)
-	// Optional: Add metadata persistence layer for recovery scenarios
+	taskQueueStorage := memory.NewInMemoryTaskQueueStorage(10000, 100)
 	workerRegistry := coordinator.NewWorkerRegistry()
 	sessionManager := coordinator.NewSessionManager(sessionStateStorage, workerRegistry)
 	workerClient := coordinator.NewRealWorkerClient(workerRegistry, sessionManager, logger)
 	auditLogger := coordinator.NewAuditLogger(logger)
 
-	// Initialize task queue with retry policy
 	retryPolicy := coordinator.DefaultRetryPolicy()
 	taskDispatcher := coordinator.NewTaskDispatcher(taskQueueStorage, workerClient, &retryPolicy)
 	taskQueue := coordinator.NewTaskQueue(
@@ -97,53 +78,47 @@ func main() {
 		coordinator.DefaultTaskQueueConfig(),
 	)
 
-	// Configure MCP server
 	cfg := coordinator.Config{
 		Name:    "codegen-mcp-coordinator",
 		Version: "0.1.0",
 	}
-
 	mcpServer := coordinator.NewMCPServer(cfg, sessionManager, workerClient, auditLogger, taskQueue)
-
-	logger.Info("MCP Server initialized",
-		"name", cfg.Name,
-		"version", cfg.Version,
-	)
-
-	// Create coordinator gRPC server for worker lifecycle
 	coordServer := coordinator.NewCoordinatorServer(workerRegistry, sessionManager, logger)
-	grpcServer := grpc.NewServer()
-	coordServer.RegisterWithServer(grpcServer)
 
-	// Setup context for shutdown
-	ctx, cancel := context.WithCancel(context.Background())
+	return taskQueue, mcpServer, coordServer, sessionManager
+}
 
-	// Start listening for worker connections
-	listenConfig := net.ListenConfig{}
-	lis, err := listenConfig.Listen(ctx, "tcp", fmt.Sprintf(":%s", grpcPort))
-	if err != nil {
-		cancel()
-		log.Fatalf("Failed to listen on port %s: %v", grpcPort, err)
-	}
-	defer cancel()
-
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
-
-	// Start task queue background workers
+func startBackgroundServices(
+	ctx context.Context,
+	cancel context.CancelFunc,
+	logger *slog.Logger,
+	taskQueue *coordinator.TaskQueue,
+	mcpServer *coordinator.MCPServer,
+	coordServer *coordinator.CoordinatorServer,
+	sessionManager *coordinator.SessionManager,
+	grpcServer *grpc.Server,
+	grpcPort, httpPort string,
+) {
 	taskQueue.Start()
 	logger.Info("Task queue background workers started")
 
-	// Start gRPC server for workers
+	// Start gRPC server
 	go func() {
 		logger.Info("Starting gRPC server for workers", "port", grpcPort)
+		listenConfig := net.ListenConfig{}
+		lis, err := listenConfig.Listen(ctx, "tcp", fmt.Sprintf(":%s", grpcPort))
+		if err != nil {
+			logger.Error("Failed to listen on gRPC port", "port", grpcPort, "error", err)
+			cancel()
+			return
+		}
 		if err := grpcServer.Serve(lis); err != nil {
 			logger.Error("gRPC server error", "error", err)
 			cancel()
 		}
 	}()
 
-	// Start MCP server in goroutine
+	// Start MCP server
 	go func() {
 		if *httpMode {
 			logger.Info("Starting MCP server with HTTP/SSE transport", "port", httpPort)
@@ -160,11 +135,10 @@ func main() {
 		}
 	}()
 
-	// Start session cleanup goroutine
+	// Start session cleanup
 	go func() {
 		ticker := time.NewTicker(cleanupInterval)
 		defer ticker.Stop()
-
 		for {
 			select {
 			case <-ticker.C:
@@ -178,10 +152,44 @@ func main() {
 		}
 	}()
 
-	// Start worker cleanup goroutine
+	// Start worker cleanup
 	go coordServer.StartCleanupLoop(ctx, workerCleanupInterval)
+}
 
-	// Wait for shutdown signal
+func main() {
+	flag.Parse()
+
+	if *version {
+		fmt.Println("CodeGen MCP Coordinator v0.1.0")
+		os.Exit(0)
+	}
+
+	logger := setupLogger()
+	grpcPort, httpPort := getPortConfig()
+
+	logger.Info("Starting CodeGen MCP Coordinator",
+		"version", "0.1.0",
+		"debug", *debug,
+		"grpc_port", grpcPort,
+		"http_mode", *httpMode,
+		"http_port", httpPort,
+	)
+
+	taskQueue, mcpServer, coordServer, sessionManager := initializeComponents(logger)
+
+	logger.Info("MCP Server initialized", "name", "codegen-mcp-coordinator", "version", "0.1.0")
+
+	grpcServer := grpc.NewServer()
+	coordServer.RegisterWithServer(grpcServer)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	startBackgroundServices(ctx, cancel, logger, taskQueue, mcpServer, coordServer, sessionManager, grpcServer, grpcPort, httpPort)
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	select {
 	case <-sigChan:
 		logger.Info("Received shutdown signal")
@@ -190,8 +198,6 @@ func main() {
 	}
 
 	logger.Info("Shutting down gracefully")
-
-	// Cancel context to stop all background goroutines
 	cancel()
 
 	// Stop task queue

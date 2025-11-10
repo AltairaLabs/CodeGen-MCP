@@ -75,6 +75,78 @@ func NewRealWorkerClient(
 }
 
 // ExecuteTask routes a task to the appropriate worker via bidirectional stream
+func (r *RealWorkerClient) checkSessionState(session *Session) error {
+	switch session.State {
+	case SessionStateFailed:
+		return fmt.Errorf("session creation failed: %s", session.StateMessage)
+	case SessionStateTerminating:
+		return fmt.Errorf("session is terminating")
+	case SessionStateCreating, SessionStateReady:
+		return nil
+	default:
+		return fmt.Errorf("session in unknown state: %s", session.State)
+	}
+}
+
+func (r *RealWorkerClient) waitForTaskResponse(
+	ctx context.Context,
+	worker *RegisteredWorker,
+	session *Session,
+	taskID string,
+	responseChan <-chan *protov1.TaskStreamResponse,
+) (*protov1.TaskStreamResult, *protov1.TaskStreamError, error) {
+	var finalResult *protov1.TaskStreamResult
+	var taskError *protov1.TaskStreamError
+
+	for {
+		select {
+		case <-ctx.Done():
+			worker.mu.Lock()
+			delete(worker.PendingTasks, taskID)
+			worker.mu.Unlock()
+			return nil, nil, fmt.Errorf("task timeout: %w", ctx.Err())
+
+		case response, ok := <-responseChan:
+			if !ok {
+				return nil, nil, fmt.Errorf("task response channel closed")
+			}
+
+			switch payload := response.Payload.(type) {
+			case *protov1.TaskStreamResponse_Result:
+				finalResult = payload.Result
+				if len(finalResult.SessionMetadata) > 0 {
+					r.syncSessionMetadata(ctx, session.ID, finalResult.SessionMetadata)
+				}
+				worker.mu.Lock()
+				delete(worker.PendingTasks, taskID)
+				worker.mu.Unlock()
+				return finalResult, nil, nil
+
+			case *protov1.TaskStreamResponse_Error:
+				taskError = payload.Error
+				worker.mu.Lock()
+				delete(worker.PendingTasks, taskID)
+				worker.mu.Unlock()
+				return nil, taskError, nil
+
+			case *protov1.TaskStreamResponse_Log:
+				r.logger.DebugContext(ctx, "Worker log", "level", payload.Log.Level, "message", payload.Log.Message)
+
+			case *protov1.TaskStreamResponse_Progress:
+				r.logger.DebugContext(ctx, "Worker progress", "stage", payload.Progress.Stage, "percent", payload.Progress.PercentComplete)
+			}
+		}
+	}
+}
+
+func (r *RealWorkerClient) syncSessionMetadata(ctx context.Context, sessionID string, metadata map[string]string) {
+	if err := r.sessionManager.storage.SetSessionMetadata(ctx, sessionID, metadata); err != nil {
+		r.logger.WarnContext(ctx, "Failed to sync session metadata from worker", "session_id", sessionID, "error", err)
+	} else {
+		r.logger.DebugContext(ctx, "Synced session metadata from worker", "session_id", sessionID, "metadata_keys", len(metadata))
+	}
+}
+
 func (r *RealWorkerClient) ExecuteTask(
 	ctx context.Context,
 	workspaceID string,
@@ -86,115 +158,33 @@ func (r *RealWorkerClient) ExecuteTask(
 		return nil, err
 	}
 
-	// Check session state - if still creating, task will wait on worker side
-	// If failed, return error immediately
-	switch session.State {
-	case SessionStateFailed:
-		return nil, fmt.Errorf("session creation failed: %s", session.StateMessage)
-	case SessionStateTerminating:
-		return nil, fmt.Errorf("session is terminating")
-	case SessionStateCreating, SessionStateReady:
-		// Continue - worker will handle the wait if needed
-	default:
-		return nil, fmt.Errorf("session in unknown state: %s", session.State)
+	if err := r.checkSessionState(session); err != nil {
+		return nil, err
 	}
 
-	// Convert TaskArgs to protobuf format
 	protoArgs := make(map[string]string)
 	for k, v := range args {
 		protoArgs[k] = fmt.Sprintf("%v", v)
 	}
 
-	// Generate unique task ID
 	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
-
-	// Get next sequence number for this session (for deduplication)
-	// Returns 0 if storage is not available (means no sequence tracking)
 	sequence := r.sessionManager.GetNextSequence(ctx, session.ID)
 
-	// Add timeout to prevent hanging forever if worker disconnects
 	taskCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	// Send task to worker over stream
 	startTime := time.Now()
 	responseChan, err := r.sendTaskToWorker(taskCtx, worker, session, taskID, toolName, workspaceID, protoArgs, sequence)
 	if err != nil {
 		return nil, err
 	}
 
-	// Wait for responses from worker
-	var finalResult *protov1.TaskStreamResult
-	var taskError *protov1.TaskStreamError
-
-	for {
-		select {
-		case <-taskCtx.Done():
-			// Cleanup pending task
-			worker.mu.Lock()
-			delete(worker.PendingTasks, taskID)
-			worker.mu.Unlock()
-			return nil, fmt.Errorf("task timeout: %w", taskCtx.Err())
-
-		case response, ok := <-responseChan:
-			if !ok {
-				// Channel closed, task failed
-				return nil, fmt.Errorf("task response channel closed")
-			}
-
-			// Handle different response types
-			switch payload := response.Payload.(type) {
-			case *protov1.TaskStreamResponse_Result:
-				finalResult = payload.Result
-
-				// Sync session metadata from worker (worker is master)
-				if len(finalResult.SessionMetadata) > 0 {
-					if err := r.sessionManager.storage.SetSessionMetadata(ctx, session.ID, finalResult.SessionMetadata); err != nil {
-						r.logger.WarnContext(ctx, "Failed to sync session metadata from worker",
-							"session_id", session.ID,
-							"error", err,
-						)
-					} else {
-						r.logger.DebugContext(ctx, "Synced session metadata from worker",
-							"session_id", session.ID,
-							"metadata_keys", len(finalResult.SessionMetadata),
-						)
-					}
-				}
-
-				// Task complete, cleanup and return
-				worker.mu.Lock()
-				delete(worker.PendingTasks, taskID)
-				worker.mu.Unlock()
-				goto buildResult
-
-			case *protov1.TaskStreamResponse_Error:
-				taskError = payload.Error
-				// Task errored, cleanup and return
-				worker.mu.Lock()
-				delete(worker.PendingTasks, taskID)
-				worker.mu.Unlock()
-				goto buildResult
-
-			case *protov1.TaskStreamResponse_Log:
-				r.logger.DebugContext(ctx, "Worker log",
-					"level", payload.Log.Level,
-					"message", payload.Log.Message,
-				)
-
-			case *protov1.TaskStreamResponse_Progress:
-				r.logger.DebugContext(ctx, "Worker progress",
-					"stage", payload.Progress.Stage,
-					"percent", payload.Progress.PercentComplete,
-				)
-			}
-		}
+	finalResult, taskError, err := r.waitForTaskResponse(taskCtx, worker, session, taskID, responseChan)
+	if err != nil {
+		return nil, err
 	}
 
-buildResult:
 	duration := time.Since(startTime)
-
-	// Build and return result
 	result, err := r.buildTaskResultFromStream(finalResult, taskError, duration, toolName)
 	if err != nil {
 		return nil, err
@@ -222,98 +212,30 @@ func (r *RealWorkerClient) ExecuteTypedTask(
 		return nil, err
 	}
 
-	// Check session state
-	switch session.State {
-	case SessionStateFailed:
-		return nil, fmt.Errorf("session creation failed: %s", session.StateMessage)
-	case SessionStateTerminating:
-		return nil, fmt.Errorf("session is terminating")
-	case SessionStateCreating, SessionStateReady:
-		// Continue
-	default:
-		return nil, fmt.Errorf("session in unknown state: %s", session.State)
+	if err := r.checkSessionState(session); err != nil {
+		return nil, err
 	}
 
-	// Generate unique task ID
 	taskID := fmt.Sprintf("task-%d", time.Now().UnixNano())
-
-	// Get next sequence number
 	sequence := r.sessionManager.GetNextSequence(ctx, session.ID)
 
-	// Add timeout
 	taskCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
 
-	// Extract tool name for logging
 	toolName := getToolNameFromTypedRequest(request)
-
-	// Send typed task to worker
 	startTime := time.Now()
+
 	responseChan, err := r.sendTypedTaskToWorker(taskCtx, worker, session, taskID, request, workspaceID, sequence)
 	if err != nil {
 		return nil, err
 	}
 
-	// Wait for responses
-	var finalResult *protov1.TaskStreamResult
-	var taskError *protov1.TaskStreamError
-
-	for {
-		select {
-		case <-taskCtx.Done():
-			worker.mu.Lock()
-			delete(worker.PendingTasks, taskID)
-			worker.mu.Unlock()
-			return nil, fmt.Errorf("task timeout: %w", taskCtx.Err())
-
-		case response, ok := <-responseChan:
-			if !ok {
-				return nil, fmt.Errorf("task response channel closed")
-			}
-
-			switch payload := response.Payload.(type) {
-			case *protov1.TaskStreamResponse_Result:
-				finalResult = payload.Result
-
-				// Sync session metadata
-				if len(finalResult.SessionMetadata) > 0 {
-					if syncErr := r.sessionManager.storage.SetSessionMetadata(ctx, session.ID, finalResult.SessionMetadata); syncErr != nil {
-						r.logger.WarnContext(ctx, "Failed to sync session metadata from worker",
-							"session_id", session.ID,
-							"error", syncErr,
-						)
-					}
-				}
-
-				// Task complete, break loop
-				goto taskComplete
-
-			case *protov1.TaskStreamResponse_Error:
-				taskError = payload.Error
-				goto taskComplete
-
-			case *protov1.TaskStreamResponse_Progress:
-				// Just log progress, continue waiting
-				r.logger.DebugContext(ctx, "Task progress",
-					"task_id", taskID,
-					"percent", payload.Progress.PercentComplete,
-					"stage", payload.Progress.Stage,
-				)
-
-			case *protov1.TaskStreamResponse_Log:
-				// Log from task execution
-				r.logger.DebugContext(ctx, "Task log",
-					"task_id", taskID,
-					"level", payload.Log.Level,
-					"message", payload.Log.Message,
-				)
-			}
-		}
+	finalResult, taskError, err := r.waitForTaskResponse(taskCtx, worker, session, taskID, responseChan)
+	if err != nil {
+		return nil, err
 	}
 
-taskComplete:
 	duration := time.Since(startTime)
-
 	result, err := r.buildTaskResultFromStream(finalResult, taskError, duration, toolName)
 	if err != nil {
 		return nil, err
