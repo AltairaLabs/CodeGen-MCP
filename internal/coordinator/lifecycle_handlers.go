@@ -427,62 +427,97 @@ func (cs *CoordinatorServer) handleSessionCreated(
 	worker **RegisteredWorker,
 	stream protov1.WorkerLifecycle_TaskStreamServer,
 ) {
-	// If worker not yet identified, try to identify by the session id in pending maps
+	// Identify worker if not already identified
 	if *workerID == "" {
-		cs.workerRegistry.mu.RLock()
-		for _, w := range cs.workerRegistry.workers {
-			w.mu.RLock()
-			if _, ok := w.PendingSessionCreates[resp.SessionId]; ok {
-				*worker = w
-				*workerID = w.WorkerID
-				w.mu.RUnlock()
-				break
-			}
-			w.mu.RUnlock()
-		}
-		cs.workerRegistry.mu.RUnlock()
-		if *worker != nil {
-			(*worker).mu.Lock()
-			(*worker).TaskStream = stream
-			(*worker).mu.Unlock()
-			cs.logger.Info("Associated stream with worker via session create response", "worker_id", *workerID)
-		}
+		cs.identifyWorkerBySession(resp.SessionId, workerID, worker, stream)
 	}
 
 	// Find coordinator session by worker session ID
-	allSessions := cs.sessionManager.GetAllSessions()
-	var coordSessionID string
-	for id, session := range allSessions {
-		if session.WorkerSessionID == resp.SessionId {
-			coordSessionID = id
-			break
-		}
-	}
-
+	coordSessionID := cs.findCoordinatorSessionID(resp.SessionId)
 	if coordSessionID == "" {
 		return
 	}
 
+	// Update session state based on success/failure
+	cs.updateSessionStateFromResponse(coordSessionID, resp, *workerID)
+
+	// Route response to waiting channel
+	cs.routeSessionCreateResponse(resp, *worker)
+}
+
+func (cs *CoordinatorServer) identifyWorkerBySession(
+	sessionID string,
+	workerID *string,
+	worker **RegisteredWorker,
+	stream protov1.WorkerLifecycle_TaskStreamServer,
+) {
+	cs.workerRegistry.mu.RLock()
+	for _, w := range cs.workerRegistry.workers {
+		w.mu.RLock()
+		if _, ok := w.PendingSessionCreates[sessionID]; ok {
+			*worker = w
+			*workerID = w.WorkerID
+			w.mu.RUnlock()
+			break
+		}
+		w.mu.RUnlock()
+	}
+	cs.workerRegistry.mu.RUnlock()
+
+	if *worker != nil {
+		(*worker).mu.Lock()
+		(*worker).TaskStream = stream
+		(*worker).mu.Unlock()
+		cs.logger.Info("Associated stream with worker via session create response", "worker_id", *workerID)
+	}
+}
+
+func (cs *CoordinatorServer) findCoordinatorSessionID(workerSessionID string) string {
+	allSessions := cs.sessionManager.GetAllSessions()
+	for id, session := range allSessions {
+		if session.WorkerSessionID == workerSessionID {
+			return id
+		}
+	}
+	return ""
+}
+
+func (cs *CoordinatorServer) updateSessionStateFromResponse(
+	coordSessionID string,
+	resp *protov1.SessionCreateResponse,
+	workerID string,
+) {
 	if resp.Success {
 		if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateReady, ""); err == nil {
-			cs.logger.Info("Session ready on worker", "session_id", coordSessionID, "worker_session_id", resp.SessionId, "worker_id", *workerID)
+			cs.logger.Info("Session ready on worker",
+				"session_id", coordSessionID,
+				"worker_session_id", resp.SessionId,
+				"worker_id", workerID)
 		}
 	} else {
 		if err := cs.sessionManager.UpdateSessionState(coordSessionID, SessionStateFailed, resp.Error); err == nil {
-			cs.logger.Error("Session creation failed on worker", "session_id", coordSessionID, "worker_session_id", resp.SessionId, "worker_id", *workerID, "error", resp.Error)
+			cs.logger.Error("Session creation failed on worker",
+				"session_id", coordSessionID,
+				"worker_session_id", resp.SessionId,
+				"worker_id", workerID,
+				"error", resp.Error)
 		}
 	}
+}
 
-	// Route response to waiting channel
-	if *worker != nil {
-		(*worker).mu.RLock()
-		ch, ok := (*worker).PendingSessionCreates[resp.SessionId]
-		(*worker).mu.RUnlock()
-		if ok {
-			select {
-			case ch <- resp:
-			default:
-			}
+func (cs *CoordinatorServer) routeSessionCreateResponse(resp *protov1.SessionCreateResponse, worker *RegisteredWorker) {
+	if worker == nil {
+		return
+	}
+
+	worker.mu.RLock()
+	ch, ok := worker.PendingSessionCreates[resp.SessionId]
+	worker.mu.RUnlock()
+
+	if ok {
+		select {
+		case ch <- resp:
+		default:
 		}
 	}
 }

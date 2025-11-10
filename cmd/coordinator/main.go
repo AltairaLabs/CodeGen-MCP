@@ -88,72 +88,81 @@ func initializeComponents(logger *slog.Logger) (
 	return taskQueue, mcpServer, coordServer, sessionManager
 }
 
-func startBackgroundServices(
-	ctx context.Context,
-	cancel context.CancelFunc,
-	logger *slog.Logger,
-	taskQueue *coordinator.TaskQueue,
-	mcpServer *coordinator.MCPServer,
-	coordServer *coordinator.CoordinatorServer,
-	sessionManager *coordinator.SessionManager,
-	grpcServer *grpc.Server,
-	grpcPort, httpPort string,
-) {
-	taskQueue.Start()
-	logger.Info("Task queue background workers started")
+// serverConfig holds all configuration for background services
+type serverConfig struct {
+	ctx            context.Context
+	cancel         context.CancelFunc
+	logger         *slog.Logger
+	taskQueue      *coordinator.TaskQueue
+	mcpServer      *coordinator.MCPServer
+	coordServer    *coordinator.CoordinatorServer
+	sessionManager *coordinator.SessionManager
+	grpcServer     *grpc.Server
+	grpcPort       string
+	httpPort       string
+}
 
-	// Start gRPC server
+func startBackgroundServices(cfg serverConfig) {
+	cfg.taskQueue.Start()
+	cfg.logger.Info("Task queue background workers started")
+
+	startGRPCServer(cfg)
+	startMCPServer(cfg)
+	startSessionCleanup(cfg)
+	cfg.coordServer.StartCleanupLoop(cfg.ctx, workerCleanupInterval)
+}
+
+func startGRPCServer(cfg serverConfig) {
 	go func() {
-		logger.Info("Starting gRPC server for workers", "port", grpcPort)
+		cfg.logger.Info("Starting gRPC server for workers", "port", cfg.grpcPort)
 		listenConfig := net.ListenConfig{}
-		lis, err := listenConfig.Listen(ctx, "tcp", fmt.Sprintf(":%s", grpcPort))
+		lis, err := listenConfig.Listen(cfg.ctx, "tcp", fmt.Sprintf(":%s", cfg.grpcPort))
 		if err != nil {
-			logger.Error("Failed to listen on gRPC port", "port", grpcPort, "error", err)
-			cancel()
+			cfg.logger.Error("Failed to listen on gRPC port", "port", cfg.grpcPort, "error", err)
+			cfg.cancel()
 			return
 		}
-		if err := grpcServer.Serve(lis); err != nil {
-			logger.Error("gRPC server error", "error", err)
-			cancel()
+		if err := cfg.grpcServer.Serve(lis); err != nil {
+			cfg.logger.Error("gRPC server error", "error", err)
+			cfg.cancel()
 		}
 	}()
+}
 
-	// Start MCP server
+func startMCPServer(cfg serverConfig) {
 	go func() {
 		if *httpMode {
-			logger.Info("Starting MCP server with HTTP/SSE transport", "port", httpPort)
-			if err := mcpServer.ServeHTTPWithLogger(":"+httpPort, logger); err != nil {
-				logger.Error("MCP server error", "error", err)
-				cancel()
+			cfg.logger.Info("Starting MCP server with HTTP/SSE transport", "port", cfg.httpPort)
+			if err := cfg.mcpServer.ServeHTTPWithLogger(":"+cfg.httpPort, cfg.logger); err != nil {
+				cfg.logger.Error("MCP server error", "error", err)
+				cfg.cancel()
 			}
 		} else {
-			logger.Info("Starting MCP server on stdio")
-			if err := mcpServer.Serve(); err != nil {
-				logger.Error("MCP server error", "error", err)
-				cancel()
+			cfg.logger.Info("Starting MCP server on stdio")
+			if err := cfg.mcpServer.Serve(); err != nil {
+				cfg.logger.Error("MCP server error", "error", err)
+				cfg.cancel()
 			}
 		}
 	}()
+}
 
-	// Start session cleanup
+func startSessionCleanup(cfg serverConfig) {
 	go func() {
 		ticker := time.NewTicker(cleanupInterval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-ticker.C:
-				deleted := sessionManager.CleanupStale(defaultSessionMaxAge)
+				deleted := cfg.sessionManager.CleanupStale(defaultSessionMaxAge)
 				if deleted > 0 {
-					logger.Info("Cleaned up stale sessions", "count", deleted)
+					cfg.logger.Info("Cleaned up stale sessions", "count", deleted)
 				}
-			case <-ctx.Done():
+			case <-cfg.ctx.Done():
 				return
 			}
 		}
 	}()
-
-	// Start worker cleanup
-	go coordServer.StartCleanupLoop(ctx, workerCleanupInterval)
 }
 
 func main() {
@@ -185,7 +194,18 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	startBackgroundServices(ctx, cancel, logger, taskQueue, mcpServer, coordServer, sessionManager, grpcServer, grpcPort, httpPort)
+	startBackgroundServices(serverConfig{
+		ctx:            ctx,
+		cancel:         cancel,
+		logger:         logger,
+		taskQueue:      taskQueue,
+		mcpServer:      mcpServer,
+		coordServer:    coordServer,
+		sessionManager: sessionManager,
+		grpcServer:     grpcServer,
+		grpcPort:       grpcPort,
+		httpPort:       httpPort,
+	})
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)

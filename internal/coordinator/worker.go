@@ -174,7 +174,16 @@ func (r *RealWorkerClient) ExecuteTask(
 	defer cancel()
 
 	startTime := time.Now()
-	responseChan, err := r.sendTaskToWorker(taskCtx, worker, session, taskID, toolName, workspaceID, protoArgs, sequence)
+	responseChan, err := r.sendTaskToWorker(taskSendParams{
+		ctx:         taskCtx,
+		worker:      worker,
+		session:     session,
+		taskID:      taskID,
+		toolName:    toolName,
+		workspaceID: workspaceID,
+		protoArgs:   protoArgs,
+		sequence:    sequence,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -225,7 +234,15 @@ func (r *RealWorkerClient) ExecuteTypedTask(
 	toolName := getToolNameFromTypedRequest(request)
 	startTime := time.Now()
 
-	responseChan, err := r.sendTypedTaskToWorker(taskCtx, worker, session, taskID, request, workspaceID, sequence)
+	responseChan, err := r.sendTypedTaskToWorker(taskSendParams{
+		ctx:         taskCtx,
+		worker:      worker,
+		session:     session,
+		taskID:      taskID,
+		workspaceID: workspaceID,
+		sequence:    sequence,
+		request:     request,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -277,29 +294,35 @@ func (r *RealWorkerClient) getSessionAndWorker(ctx context.Context) (*Session, *
 }
 
 // sendTaskToWorker sends a task assignment to worker over the bidirectional stream
-func (r *RealWorkerClient) sendTaskToWorker(
-	ctx context.Context,
-	worker *RegisteredWorker,
-	session *Session,
-	taskID string,
-	toolName string,
-	workspaceID string,
-	protoArgs map[string]string,
-	sequence uint64,
-) (chan *protov1.TaskStreamResponse, error) {
-	worker.mu.Lock()
-	defer worker.mu.Unlock()
+// taskSendParams holds parameters for sending tasks to workers
+type taskSendParams struct {
+	ctx         context.Context
+	worker      *RegisteredWorker
+	session     *Session
+	taskID      string
+	workspaceID string
+	sequence    uint64
+	// For legacy sendTaskToWorker
+	toolName  string
+	protoArgs map[string]string
+	// For sendTypedTaskToWorker
+	request *protov1.ToolRequest
+}
+
+func (r *RealWorkerClient) sendTaskToWorker(params taskSendParams) (chan *protov1.TaskStreamResponse, error) {
+	params.worker.mu.Lock()
+	defer params.worker.mu.Unlock()
 
 	// Check if worker has an active task stream
-	if worker.TaskStream == nil {
-		return nil, fmt.Errorf("worker %s has no active task stream", worker.WorkerID)
+	if params.worker.TaskStream == nil {
+		return nil, fmt.Errorf("worker %s has no active task stream", params.worker.WorkerID)
 	}
 
 	// Create channel for receiving responses and track with tool name
 	responseChan := make(chan *protov1.TaskStreamResponse, 10)
-	worker.PendingTasks[taskID] = &PendingTask{
+	params.worker.PendingTasks[params.taskID] = &PendingTask{
 		ResponseChan: responseChan,
-		ToolName:     toolName,
+		ToolName:     params.toolName,
 	}
 
 	// DEPRECATED: This method should not be used anymore - use sendTypedTaskToWorker instead
@@ -307,28 +330,20 @@ func (r *RealWorkerClient) sendTaskToWorker(
 }
 
 // sendTypedTaskToWorker sends a typed task assignment to worker over the bidirectional stream
-func (r *RealWorkerClient) sendTypedTaskToWorker(
-	ctx context.Context,
-	worker *RegisteredWorker,
-	session *Session,
-	taskID string,
-	request *protov1.ToolRequest,
-	workspaceID string,
-	sequence uint64,
-) (chan *protov1.TaskStreamResponse, error) {
-	worker.mu.Lock()
-	defer worker.mu.Unlock()
+func (r *RealWorkerClient) sendTypedTaskToWorker(params taskSendParams) (chan *protov1.TaskStreamResponse, error) {
+	params.worker.mu.Lock()
+	defer params.worker.mu.Unlock()
 
-	if worker.TaskStream == nil {
-		return nil, fmt.Errorf("worker %s has no active task stream", worker.WorkerID)
+	if params.worker.TaskStream == nil {
+		return nil, fmt.Errorf("worker %s has no active task stream", params.worker.WorkerID)
 	}
 
 	// Extract tool name for tracking
-	toolName := getToolNameFromTypedRequest(request)
+	toolName := getToolNameFromTypedRequest(params.request)
 
 	// Create channel for receiving responses
 	responseChan := make(chan *protov1.TaskStreamResponse, 10)
-	worker.PendingTasks[taskID] = &PendingTask{
+	params.worker.PendingTasks[params.taskID] = &PendingTask{
 		ResponseChan: responseChan,
 		ToolName:     toolName,
 	}
@@ -337,28 +352,28 @@ func (r *RealWorkerClient) sendTypedTaskToWorker(
 	assignment := &protov1.TaskStreamMessage{
 		Message: &protov1.TaskStreamMessage_Assignment{
 			Assignment: &protov1.TaskAssignment{
-				TaskId:    taskID,
-				SessionId: session.WorkerSessionID,
-				Request:   request,
+				TaskId:    params.taskID,
+				SessionId: params.session.WorkerSessionID,
+				Request:   params.request,
 				Context: &protov1.TaskContext{
-					WorkspaceId: workspaceID,
-					UserId:      session.UserID,
+					WorkspaceId: params.workspaceID,
+					UserId:      params.session.UserID,
 				},
-				Sequence: sequence,
+				Sequence: params.sequence,
 			},
 		},
 	}
 
-	err := worker.TaskStream.Send(assignment)
+	err := params.worker.TaskStream.Send(assignment)
 	if err != nil {
-		delete(worker.PendingTasks, taskID)
+		delete(params.worker.PendingTasks, params.taskID)
 		close(responseChan)
 		return nil, fmt.Errorf("failed to send task to worker: %w", err)
 	}
 
-	r.logger.InfoContext(ctx, "Sent typed task to worker via stream",
-		"worker_id", worker.WorkerID,
-		"task_id", taskID,
+	r.logger.InfoContext(params.ctx, "Sent typed task to worker via stream",
+		"worker_id", params.worker.WorkerID,
+		"task_id", params.taskID,
 		"tool_name", toolName,
 	)
 
