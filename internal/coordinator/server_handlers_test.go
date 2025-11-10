@@ -722,3 +722,436 @@ func TestGetOrCreateSession_NoWorkersAvailable(t *testing.T) {
 		t.Errorf("Expected error %q, got %q", expectedErr, err.Error())
 	}
 }
+
+// Test handleFsList directly
+func TestHandleFsList(t *testing.T) {
+	registry := NewWorkerRegistry()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	// Register a mock worker with capacity
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	registry.RegisterWorker("test-worker", mockWorker)
+
+	session := sm.CreateSession(context.Background(), "test-list", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test with path
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "fs.list",
+			Arguments: map[string]interface{}{
+				"path": "src",
+			},
+		},
+	}
+
+	result, err := server.handleFsList(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handleFsList returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if result.IsError {
+		t.Errorf("Expected success, got error: %v", result.Content)
+	}
+}
+
+// Test handleFsList with no path (root directory)
+func TestHandleFsList_RootPath(t *testing.T) {
+	registry := NewWorkerRegistry()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	// Register a mock worker
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	registry.RegisterWorker("test-worker", mockWorker)
+
+	session := sm.CreateSession(context.Background(), "test-list-root", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test without path (root directory)
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      "fs.list",
+			Arguments: map[string]interface{}{},
+		},
+	}
+
+	result, err := server.handleFsList(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handleFsList returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if result.IsError {
+		t.Errorf("Expected success, got error: %v", result.Content)
+	}
+}
+
+// Test handleFsList with path traversal (should fail)
+func TestHandleFsList_PathTraversal(t *testing.T) {
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	session := sm.CreateSession(context.Background(), "test-list-traversal", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test path traversal (should be rejected)
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "fs.list",
+			Arguments: map[string]interface{}{
+				"path": "../../../etc",
+			},
+		},
+	}
+
+	result, err := server.handleFsList(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handleFsList should not return error, got: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if !result.IsError {
+		t.Error("Expected error for path traversal")
+	}
+}
+
+// Test handleRunPython directly
+func TestHandleRunPython(t *testing.T) {
+	registry := NewWorkerRegistry()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	// Register a mock worker
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	registry.RegisterWorker("test-worker", mockWorker)
+
+	session := sm.CreateSession(context.Background(), "test-python", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test with code
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "run.python",
+			Arguments: map[string]interface{}{
+				"code": "print('hello')",
+			},
+		},
+	}
+
+	result, err := server.handleRunPython(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handleRunPython returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if result.IsError {
+		t.Errorf("Expected success, got error: %v", result.Content)
+	}
+}
+
+// Test handleRunPython with file parameter
+func TestHandleRunPython_WithFile(t *testing.T) {
+	registry := NewWorkerRegistry()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	// Register a mock worker
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	registry.RegisterWorker("test-worker", mockWorker)
+
+	session := sm.CreateSession(context.Background(), "test-python-file", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test with file
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "run.python",
+			Arguments: map[string]interface{}{
+				"file": "script.py",
+			},
+		},
+	}
+
+	result, err := server.handleRunPython(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handleRunPython returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if result.IsError {
+		t.Errorf("Expected success, got error: %v", result.Content)
+	}
+}
+
+// Test handleRunPython with path traversal in file (should fail)
+func TestHandleRunPython_PathTraversal(t *testing.T) {
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	session := sm.CreateSession(context.Background(), "test-python-traversal", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test path traversal in file
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "run.python",
+			Arguments: map[string]interface{}{
+				"file": "../../etc/passwd",
+			},
+		},
+	}
+
+	result, err := server.handleRunPython(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handleRunPython should not return error, got: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if !result.IsError {
+		t.Error("Expected error for path traversal")
+	}
+}
+
+// Test handlePkgInstall directly
+func TestHandlePkgInstall(t *testing.T) {
+	registry := NewWorkerRegistry()
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, registry)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	// Register a mock worker
+	mockWorker := &RegisteredWorker{
+		WorkerID: "test-worker",
+		Status: &protov1.WorkerStatus{
+			State:       protov1.WorkerStatus_STATE_IDLE,
+			ActiveTasks: 0,
+		},
+		Capacity: &protov1.SessionCapacity{
+			TotalSessions:     5,
+			AvailableSessions: 5,
+		},
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+	}
+	registry.RegisterWorker("test-worker", mockWorker)
+
+	session := sm.CreateSession(context.Background(), "test-pkg", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test with packages
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name: "pkg.install",
+			Arguments: map[string]interface{}{
+				"packages": "requests flask",
+			},
+		},
+	}
+
+	result, err := server.handlePkgInstall(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handlePkgInstall returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if result.IsError {
+		t.Errorf("Expected success, got error: %v", result.Content)
+	}
+}
+
+// Test handlePkgInstall with missing packages (should fail)
+func TestHandlePkgInstall_MissingPackages(t *testing.T) {
+	storage := newTestSessionStorage()
+	sm := NewSessionManager(storage, nil)
+	worker := NewMockWorkerClient()
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	audit := NewAuditLogger(logger)
+
+	cfg := Config{
+		Name:    "TestServer",
+		Version: "1.0.0",
+	}
+
+	tq := newTestTaskQueue(sm, worker, logger)
+	server := NewMCPServer(cfg, sm, worker, audit, tq)
+
+	session := sm.CreateSession(context.Background(), "test-pkg-missing", "user1", "workspace1")
+	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+
+	// Test without packages (should fail)
+	request := mcp.CallToolRequest{
+		Params: mcp.CallToolParams{
+			Name:      "pkg.install",
+			Arguments: map[string]interface{}{},
+		},
+	}
+
+	result, err := server.handlePkgInstall(ctx, request)
+
+	if err != nil {
+		t.Fatalf("handlePkgInstall should not return error, got: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+
+	if !result.IsError {
+		t.Error("Expected error for missing packages parameter")
+	}
+}
