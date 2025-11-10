@@ -39,4 +39,4 @@ docker-compose.override.yml
 
 bin/**
 tmp/
-.mypy_cache/
+.mypy_cache/golangci-lint-report.*

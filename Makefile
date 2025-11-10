@@ -128,7 +128,10 @@ lint-ci: ## Run linters for CI (strict mode)
 	@go vet ./...
 	@echo "Running go fmt..."
 	@test -z "$$(gofmt -l .)" || (echo "Go files need formatting:" && gofmt -l . && exit 1)
-	@echo "Running golangci-lint..."
+	@echo "Running golangci-lint with report generation..."
+	@golangci-lint run ./... --output.checkstyle.path=golangci-lint-report.xml || echo "Lint issues found (checkstyle report generated)"
+	@golangci-lint run ./... --output.json.path=golangci-lint-report.json || echo "Lint issues found (json report generated)"
+	@echo "Lint reports generated: golangci-lint-report.xml and golangci-lint-report.json"
 	@golangci-lint run ./...
 
 ci: ## Run full CI pipeline locally (install, build, test, lint)
