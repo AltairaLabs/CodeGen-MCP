@@ -12,11 +12,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-// contextKey is a custom type for context keys to avoid collisions
-type contextKey string
-
-const sessionIDKey contextKey = "session_id"
-
 // MockTaskQueue implements TaskQueueInterface for testing
 // It synchronously executes tasks like the old behavior
 type MockTaskQueue struct {
@@ -109,7 +104,7 @@ func TestHandleEcho(t *testing.T) {
 
 	// Create a session for context
 	session := sm.CreateSession(context.Background(), "test-echo", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Create a CallToolRequest with arguments
 	request := mcp.CallToolRequest{
@@ -213,7 +208,7 @@ func TestHandleFsRead(t *testing.T) {
 	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-read", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test valid path
 	request := mcp.CallToolRequest{
@@ -257,7 +252,7 @@ func TestHandleFsRead_AbsolutePath(t *testing.T) {
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-read-abs", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test absolute path (should be rejected)
 	request := mcp.CallToolRequest{
@@ -301,7 +296,7 @@ func TestHandleFsRead_PathTraversal(t *testing.T) {
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-read-traversal", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test path traversal
 	request := mcp.CallToolRequest{
@@ -362,7 +357,7 @@ func TestHandleFsWrite(t *testing.T) {
 	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-write", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test valid write
 	request := mcp.CallToolRequest{
@@ -407,7 +402,7 @@ func TestHandleFsWrite_PathTraversal(t *testing.T) {
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-write-traversal", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test path traversal
 	request := mcp.CallToolRequest{
@@ -452,7 +447,7 @@ func TestHandleFsWrite_MissingContents(t *testing.T) {
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-write-missing", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Missing contents argument
 	request := mcp.CallToolRequest{
@@ -546,7 +541,7 @@ func TestGetSessionID(t *testing.T) {
 	}{
 		{
 			"with session_id in context",
-			context.WithValue(context.Background(), "session_id", "test-session-123"),
+			context.WithValue(context.Background(), sessionIDKey{}, "test-session-123"),
 			"test-session-123",
 		},
 		{
@@ -556,7 +551,7 @@ func TestGetSessionID(t *testing.T) {
 		},
 		{
 			"with wrong type in context",
-			context.WithValue(context.Background(), "session_id", 12345),
+			context.WithValue(context.Background(), sessionIDKey{}, 12345),
 			"default-session",
 		},
 	}
@@ -606,7 +601,7 @@ func TestGetOrCreateSession_NewSession(t *testing.T) {
 	}
 	_ = registry.RegisterWorker("test-worker", mockWorker)
 
-	ctx := context.WithValue(context.Background(), "session_id", "new-session")
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, "new-session")
 
 	// Should create a new session
 	session, err := server.getOrCreateSession(ctx)
@@ -679,7 +674,7 @@ func TestGetOrCreateSession_ExistingSession(t *testing.T) {
 	existingSession := sm.CreateSession(ctx, "existing-session", "user1", "workspace1")
 
 	// Now try to get it
-	ctx = context.WithValue(ctx, "session_id", "existing-session")
+	ctx = context.WithValue(ctx, sessionIDKey{}, "existing-session")
 	session, err := server.getOrCreateSession(ctx)
 
 	if err != nil {
@@ -713,7 +708,7 @@ func TestGetOrCreateSession_NoWorkersAvailable(t *testing.T) {
 	tq := newTestTaskQueue(sm, worker, logger)
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
-	ctx := context.WithValue(context.Background(), "session_id", "test-session")
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, "test-session")
 
 	// Should fail because no workers are registered
 	_, err := server.getOrCreateSession(ctx)
@@ -762,7 +757,7 @@ func TestHandleFsList(t *testing.T) {
 	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-list", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test with path
 	request := mcp.CallToolRequest{
@@ -823,7 +818,7 @@ func TestHandleFsList_RootPath(t *testing.T) {
 	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-list-root", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test without path (root directory)
 	request := mcp.CallToolRequest{
@@ -865,7 +860,7 @@ func TestHandleFsList_PathTraversal(t *testing.T) {
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-list-traversal", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test path traversal (should be rejected)
 	request := mcp.CallToolRequest{
@@ -926,7 +921,7 @@ func TestHandleRunPython(t *testing.T) {
 	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-python", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test with code
 	request := mcp.CallToolRequest{
@@ -987,7 +982,7 @@ func TestHandleRunPython_WithFile(t *testing.T) {
 	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-python-file", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test with file
 	request := mcp.CallToolRequest{
@@ -1031,7 +1026,7 @@ func TestHandleRunPython_PathTraversal(t *testing.T) {
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-python-traversal", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test path traversal in file
 	request := mcp.CallToolRequest{
@@ -1092,7 +1087,7 @@ func TestHandlePkgInstall(t *testing.T) {
 	registry.RegisterWorker("test-worker", mockWorker)
 
 	session := sm.CreateSession(context.Background(), "test-pkg", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test with packages
 	request := mcp.CallToolRequest{
@@ -1136,7 +1131,7 @@ func TestHandlePkgInstall_MissingPackages(t *testing.T) {
 	server := NewMCPServer(cfg, sm, worker, audit, tq)
 
 	session := sm.CreateSession(context.Background(), "test-pkg-missing", "user1", "workspace1")
-	ctx := context.WithValue(context.Background(), "session_id", session.ID)
+	ctx := context.WithValue(context.Background(), sessionIDKey{}, session.ID)
 
 	// Test without packages (should fail)
 	request := mcp.CallToolRequest{
