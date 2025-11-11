@@ -52,7 +52,7 @@ test-unit: ## Run fast unit tests (skips network integration tests)
 		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
 		$$(go list ./... | grep -v '/api/proto/v1$$')
 	@echo "Filtering coverage data (excluding generated proto files, main.go, and untestable infrastructure)..."
-	@grep -v -E '(\.pb\.go|cmd/.*/main\.go|_serve\.go|_streams\.go|_loops\.go):' coverage.out > coverage.filtered.out || true
+	@grep -v -E '(\.pb\.go|cmd/.*/main\.go|_serve\.go|_streams\.go|_loops\.go|_integration\.go):' coverage.out > coverage.filtered.out || true
 	@mv coverage.filtered.out coverage.out
 	@go tool cover -func=coverage.out | grep "^total:" || echo "No coverage data"
 	@echo "Coverage report generated: coverage.out"
@@ -70,13 +70,13 @@ test-race: ## Run tests with race detector
 		exit 0; \
 	fi
 
-coverage: ## Generate full coverage report (includes all tests)
-	@echo "Generating coverage report..."
-	@go test -count=1 -coverprofile=coverage.out -covermode=atomic \
+coverage: ## Generate coverage report (unit tests only, excludes integration code)
+	@echo "Generating coverage report (unit tests only)..."
+	@go test -short -count=1 -coverprofile=coverage.out -covermode=atomic \
 		-coverpkg=$$(go list ./... | grep -v '/api/proto/v1$$' | tr '\n' ',' | sed 's/,$$//') \
 		./...
 	@echo "Filtering coverage data (excluding generated proto files, main.go, and untestable infrastructure)..."
-	@grep -v -E '(\.pb\.go|cmd/.*/main\.go|_serve\.go|_streams\.go|_loops\.go):' coverage.out > coverage.filtered.out || true
+	@grep -v -E '(\.pb\.go|cmd/.*/main\.go|_serve\.go|_streams\.go|_loops\.go|_integration\.go):' coverage.out > coverage.filtered.out || true
 	@mv coverage.filtered.out coverage.out
 	@go tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
