@@ -2,14 +2,15 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
 
-const (
+var (
 	// ErrEmptyTaskID is returned when a task ID is empty
-	ErrEmptyTaskID = "taskID cannot be empty"
+	ErrEmptyTaskID = errors.New("taskID cannot be empty")
 )
 
 // ResultCache caches task results for retrieval with TTL-based expiration
@@ -60,7 +61,7 @@ func NewResultCache(ttl time.Duration) *ResultCache {
 // Store caches a task result with the configured TTL
 func (rc *ResultCache) Store(ctx context.Context, taskID string, result TaskResultInterface) error {
 	if taskID == "" {
-		return fmt.Errorf(ErrEmptyTaskID)
+		return ErrEmptyTaskID
 	}
 
 	if result == nil {
@@ -84,7 +85,7 @@ func (rc *ResultCache) Store(ctx context.Context, taskID string, result TaskResu
 // Returns the result and any error, returns error if not found or expired
 func (rc *ResultCache) Get(ctx context.Context, taskID string) (TaskResultInterface, error) {
 	if taskID == "" {
-		return nil, fmt.Errorf(ErrEmptyTaskID)
+		return nil, ErrEmptyTaskID
 	}
 
 	rc.mu.RLock()

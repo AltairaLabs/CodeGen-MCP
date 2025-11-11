@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/config"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage"
 )
 
 const (
@@ -15,19 +16,24 @@ const (
 	BatchSize = config.DefaultRetryBatchSize
 )
 
-// Scheduler periodically checks for tasks ready to be retried
-// and requeues them for execution
+// Scheduler works directly with storage types - clean and simple
 type Scheduler struct {
-	storage StorageInterface
+	storage storage.TaskQueueStorage
 	logger  *slog.Logger
 }
 
-// NewScheduler creates a new retry scheduler
-func NewScheduler(storage StorageInterface, logger *slog.Logger) *Scheduler {
+// NewScheduler creates a new retry scheduler that works directly with storage types
+// No interfaces, adapters, or type conversions needed - much cleaner architecture
+func NewScheduler(storage storage.TaskQueueStorage, logger *slog.Logger) *Scheduler {
 	return &Scheduler{
 		storage: storage,
 		logger:  logger,
 	}
+}
+
+// NewDirectScheduler is an alias for NewScheduler for backward compatibility
+func NewDirectScheduler(storage storage.TaskQueueStorage, logger *slog.Logger) *Scheduler {
+	return NewScheduler(storage, logger)
 }
 
 // Start begins the retry scheduler background goroutine
@@ -54,8 +60,9 @@ func (rs *Scheduler) Start(ctx context.Context) {
 	}
 }
 
-// processRetries checks for tasks ready to retry and requeues them
+// processRetries checks for tasks ready to retry and requeues them - clean implementation
 func (rs *Scheduler) processRetries(ctx context.Context) error {
+	// Direct call to storage - no interface conversion needed
 	tasks, err := rs.storage.GetTasksReadyForRetry(ctx, BatchSize)
 	if err != nil {
 		return err
@@ -68,17 +75,18 @@ func (rs *Scheduler) processRetries(ctx context.Context) error {
 	rs.logger.Debug("Processing retry tasks", "count", len(tasks))
 
 	for _, task := range tasks {
-		if err := rs.storage.RequeueTaskForRetry(ctx, task.GetID()); err != nil {
+		// Direct method calls - no interface overhead
+		if err := rs.storage.RequeueTaskForRetry(ctx, task.ID); err != nil {
 			rs.logger.Error("Failed to requeue task for retry",
-				"task_id", task.GetID(),
+				"task_id", task.ID,
 				"error", err,
 			)
 			continue
 		}
 
 		rs.logger.Info("Task requeued for retry",
-			"task_id", task.GetID(),
-			"retry_count", task.GetRetryCount(),
+			"task_id", task.ID,
+			"retry_count", task.RetryCount,
 		)
 	}
 

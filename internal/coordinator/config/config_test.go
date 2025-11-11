@@ -7,11 +7,11 @@ import (
 
 func TestDefaultTaskQueueConfig(t *testing.T) {
 	config := DefaultTaskQueueConfig()
-	
+
 	if config.DispatchInterval != DefaultTaskQueueDispatchInterval {
 		t.Errorf("Expected DispatchInterval %v, got %v", DefaultTaskQueueDispatchInterval, config.DispatchInterval)
 	}
-	
+
 	if config.MaxDispatchBatch != DefaultMaxDispatchBatch {
 		t.Errorf("Expected MaxDispatchBatch %d, got %d", DefaultMaxDispatchBatch, config.MaxDispatchBatch)
 	}
@@ -19,7 +19,7 @@ func TestDefaultTaskQueueConfig(t *testing.T) {
 
 func TestDefaultCacheConfig(t *testing.T) {
 	config := DefaultCacheConfig()
-	
+
 	if config.TTL != DefaultCacheTTL {
 		t.Errorf("Expected TTL %v, got %v", DefaultCacheTTL, config.TTL)
 	}
@@ -27,11 +27,11 @@ func TestDefaultCacheConfig(t *testing.T) {
 
 func TestDefaultRetryConfig(t *testing.T) {
 	config := DefaultRetryConfig()
-	
+
 	if config.CheckInterval != DefaultRetryCheckInterval {
 		t.Errorf("Expected CheckInterval %v, got %v", DefaultRetryCheckInterval, config.CheckInterval)
 	}
-	
+
 	if config.BatchSize != DefaultRetryBatchSize {
 		t.Errorf("Expected BatchSize %d, got %d", DefaultRetryBatchSize, config.BatchSize)
 	}

@@ -306,7 +306,7 @@ var File_api_proto_v1_artifact_service_proto protoreflect.FileDescriptor
 const file_api_proto_v1_artifact_service_proto_rawDesc = "" +
 	"\n" +
 	"#api/proto/v1/artifact_service.proto\x12\n" +
-	"codegen.v1\x1a\x19api/proto/v1/common.proto\"\xae\x01\n" +
+	"codegen.v1\"\xae\x01\n" +
 	"\rUploadRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
@@ -379,7 +379,6 @@ func file_api_proto_v1_artifact_service_proto_init() {
 	if File_api_proto_v1_artifact_service_proto != nil {
 		return
 	}
-	file_api_proto_v1_common_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

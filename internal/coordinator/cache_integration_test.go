@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/cache"
+	"github.com/AltairaLabs/codegen-mcp/internal/taskqueue"
 )
 
 func TestCacheIntegration(t *testing.T) {
@@ -14,7 +15,7 @@ func TestCacheIntegration(t *testing.T) {
 	defer cacheInstance.Close()
 
 	// Create a task result
-	result := &TaskResult{
+	result := &taskqueue.TaskResult{
 		Success:  true,
 		Output:   "test output",
 		Error:    "",
@@ -22,13 +23,10 @@ func TestCacheIntegration(t *testing.T) {
 		Duration: 1 * time.Second,
 	}
 
-	// Create adapter
-	adapter := NewTaskResultAdapter(result)
-
-	// Store the result
+	// Store the result directly (no adapter needed)
 	ctx := context.Background()
 	taskID := "test-task-id"
-	err := cacheInstance.Store(ctx, taskID, adapter)
+	err := cacheInstance.Store(ctx, taskID, result)
 	if err != nil {
 		t.Fatalf("Failed to store result: %v", err)
 	}

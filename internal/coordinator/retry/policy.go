@@ -87,7 +87,7 @@ func IsRetriableError(err error) bool {
 	}
 
 	for _, retriable := range retriableErrors {
-		if len(errStr) > 0 && len(retriable) > 0 && errStr == retriable {
+		if errStr != "" && retriable != "" && errStr == retriable {
 			return true
 		}
 	}

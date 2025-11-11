@@ -1,7 +1,9 @@
 package coordinator
 
 import (
+	"errors"
 	"testing"
+	"time"
 )
 
 // Test utility functions
@@ -132,6 +134,137 @@ func TestIsPermanentError(t *testing.T) {
 			result := isPermanentError(tt.errMsg)
 			if result != tt.expected {
 				t.Errorf("isPermanentError(%q) = %v, want %v", tt.errMsg, result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDefaultRetryPolicy(t *testing.T) {
+	policy := DefaultRetryPolicy()
+
+	if policy.MaxRetries != 3 {
+		t.Errorf("Expected MaxRetries 3, got %d", policy.MaxRetries)
+	}
+	if policy.InitialDelay != time.Second {
+		t.Errorf("Expected InitialDelay 1s, got %v", policy.InitialDelay)
+	}
+	if policy.MaxDelay != 30*time.Second {
+		t.Errorf("Expected MaxDelay 30s, got %v", policy.MaxDelay)
+	}
+	if policy.BackoffMultiplier != 2.0 {
+		t.Errorf("Expected BackoffMultiplier 2.0, got %f", policy.BackoffMultiplier)
+	}
+}
+
+func TestNetworkErrorRetryPolicy(t *testing.T) {
+	policy := NetworkErrorRetryPolicy()
+
+	if policy.MaxRetries != 5 {
+		t.Errorf("Expected MaxRetries 5, got %d", policy.MaxRetries)
+	}
+	if policy.InitialDelay != 500*time.Millisecond {
+		t.Errorf("Expected InitialDelay 500ms, got %v", policy.InitialDelay)
+	}
+	if policy.MaxDelay != 60*time.Second {
+		t.Errorf("Expected MaxDelay 60s, got %v", policy.MaxDelay)
+	}
+	if policy.BackoffMultiplier != 2.0 {
+		t.Errorf("Expected BackoffMultiplier 2.0, got %f", policy.BackoffMultiplier)
+	}
+}
+
+func TestNoRetryPolicy(t *testing.T) {
+	policy := NoRetryPolicy()
+
+	if policy.MaxRetries != 0 {
+		t.Errorf("Expected MaxRetries 0, got %d", policy.MaxRetries)
+	}
+}
+
+func TestCalculateNextRetryTime(t *testing.T) {
+	policy := RetryPolicy{
+		MaxRetries:        10,
+		InitialDelay:      time.Second,
+		MaxDelay:          10 * time.Second,
+		BackoffMultiplier: 2.0,
+	}
+
+	// First retry
+	next1 := policy.CalculateNextRetryTime(1)
+	delay1 := next1.Sub(time.Now())
+	if delay1 < 750*time.Millisecond || delay1 > 1500*time.Millisecond {
+		t.Errorf("First retry delay should be around 1s with jitter, got %v", delay1)
+	}
+
+	// Second retry (should be ~2s with backoff)
+	next2 := policy.CalculateNextRetryTime(2)
+	delay2 := next2.Sub(time.Now())
+	if delay2 < 1500*time.Millisecond || delay2 > 3*time.Second {
+		t.Errorf("Second retry delay should be around 2s with jitter, got %v", delay2)
+	}
+
+	// Large retry count (should be capped at MaxDelay)
+	next10 := policy.CalculateNextRetryTime(9)
+	delay10 := next10.Sub(time.Now())
+	maxWithJitter := policy.MaxDelay + policy.MaxDelay/4
+	if delay10 > maxWithJitter {
+		t.Errorf("Retry delay should be capped at MaxDelay (with jitter), got %v, max allowed %v", delay10, maxWithJitter)
+	}
+}
+
+func TestIsRetryableError(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "connection refused",
+			err:      errors.New("connection refused"),
+			expected: true,
+		},
+		{
+			name:     "deadline exceeded",
+			err:      errors.New("context deadline exceeded"),
+			expected: true,
+		},
+		{
+			name:     "temporary failure",
+			err:      errors.New("temporary failure"),
+			expected: true,
+		},
+		{
+			name:     "timeout",
+			err:      errors.New("timeout waiting for response"),
+			expected: true,
+		},
+		{
+			name:     "non-retryable error",
+			err:      errors.New("invalid argument"),
+			expected: false,
+		},
+		{
+			name:     "validation failed",
+			err:      errors.New("validation failed: missing field"),
+			expected: false,
+		},
+		{
+			name:     "permission denied",
+			err:      errors.New("permission denied"),
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsRetryableError(tt.err)
+			if result != tt.expected {
+				t.Errorf("IsRetryableError(%v) = %v, want %v", tt.err, result, tt.expected)
 			}
 		})
 	}

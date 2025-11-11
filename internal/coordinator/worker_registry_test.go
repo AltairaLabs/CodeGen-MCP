@@ -526,3 +526,65 @@ func TestWorkerRegistry_ConcurrentAccess(t *testing.T) {
 		t.Errorf("Expected 10 workers after concurrent operations, got %d", len(workers))
 	}
 }
+
+func TestWorkerRegistry_FindWorkerWithCapacity_UsingCapabilities(t *testing.T) {
+	registry := NewWorkerRegistry()
+	ctx := context.Background()
+
+	// Register worker with Capabilities but no Capacity (just registered, no heartbeat yet)
+	worker := &RegisteredWorker{
+		WorkerID:          "worker-1",
+		SessionID:         "session-1",
+		RegisteredAt:      time.Now(),
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+		Status: &protov1.WorkerStatus{
+			State: protov1.WorkerStatus_STATE_IDLE,
+		},
+		Capabilities: &protov1.WorkerCapabilities{
+			MaxSessions: 20,
+		},
+		Capacity: nil, // No capacity yet
+	}
+
+	registry.RegisterWorker("worker-1", worker)
+
+	// Should find worker using Capabilities.MaxSessions
+	best, err := registry.FindWorkerWithCapacity(ctx, nil)
+	if err != nil {
+		t.Errorf("Failed to find worker: %v", err)
+	}
+	if best == nil {
+		t.Fatal("Expected to find a worker")
+	}
+	if best.WorkerID != "worker-1" {
+		t.Errorf("Expected worker-1, got %s", best.WorkerID)
+	}
+}
+
+func TestWorkerRegistry_FindWorkerWithCapacity_NoCapacityOrCapabilities(t *testing.T) {
+	registry := NewWorkerRegistry()
+	ctx := context.Background()
+
+	// Register worker with neither Capacity nor Capabilities
+	worker := &RegisteredWorker{
+		WorkerID:          "worker-1",
+		SessionID:         "session-1",
+		RegisteredAt:      time.Now(),
+		LastHeartbeat:     time.Now(),
+		HeartbeatInterval: 30 * time.Second,
+		Status: &protov1.WorkerStatus{
+			State: protov1.WorkerStatus_STATE_IDLE,
+		},
+		Capabilities: nil,
+		Capacity:     nil,
+	}
+
+	registry.RegisterWorker("worker-1", worker)
+
+	// Should not find worker (returns 0 available sessions)
+	_, err := registry.FindWorkerWithCapacity(ctx, nil)
+	if err == nil {
+		t.Error("Expected error when worker has no capacity or capabilities")
+	}
+}

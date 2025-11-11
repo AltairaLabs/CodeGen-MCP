@@ -13,9 +13,91 @@ import (
 
 	"google.golang.org/grpc"
 
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
 	"github.com/AltairaLabs/codegen-mcp/internal/storage/memory"
+	"github.com/AltairaLabs/codegen-mcp/internal/taskqueue"
 )
+
+// Simple adapters to bridge coordinator types with taskqueue interfaces
+
+type workerClientAdapter struct {
+	*coordinator.RealWorkerClient
+}
+
+func (w *workerClientAdapter) ExecuteTask(ctx context.Context, workspaceID, toolName string, args taskqueue.TaskArgs) (*taskqueue.TaskResult, error) {
+	// Convert taskqueue.TaskArgs to coordinator.TaskArgs
+	coordArgs := make(coordinator.TaskArgs)
+	for k, v := range args {
+		coordArgs[k] = v
+	}
+
+	result, err := w.RealWorkerClient.ExecuteTask(ctx, workspaceID, toolName, coordArgs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert coordinator.TaskResult to taskqueue.TaskResult
+	return &taskqueue.TaskResult{
+		Success:  result.Success,
+		Output:   result.Output,
+		Error:    result.Error,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
+}
+
+func (w *workerClientAdapter) ExecuteTypedTask(ctx context.Context, workspaceID string, request *protov1.ToolRequest) (*taskqueue.TaskResult, error) {
+	result, err := w.RealWorkerClient.ExecuteTypedTask(ctx, workspaceID, request)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert coordinator.TaskResult to taskqueue.TaskResult
+	return &taskqueue.TaskResult{
+		Success:  result.Success,
+		Output:   result.Output,
+		Error:    result.Error,
+		ExitCode: result.ExitCode,
+		Duration: result.Duration,
+	}, nil
+}
+
+type sessionManagerAdapter struct {
+	*coordinator.SessionManager
+}
+
+func (s *sessionManagerAdapter) GetSession(sessionID string) (*taskqueue.Session, bool) {
+	coordSession, exists := s.SessionManager.GetSession(sessionID)
+	if !exists {
+		return nil, false
+	}
+
+	return &taskqueue.Session{
+		ID:          coordSession.ID,
+		WorkspaceID: coordSession.WorkspaceID,
+		UserID:      coordSession.UserID,
+		WorkerID:    coordSession.WorkerID,
+		State:       taskqueue.SessionState(coordSession.State),
+	}, true
+}
+
+func (s *sessionManagerAdapter) GetAllSessions() map[string]*taskqueue.Session {
+	coordSessions := s.SessionManager.GetAllSessions()
+	result := make(map[string]*taskqueue.Session)
+
+	for id, coordSession := range coordSessions {
+		result[id] = &taskqueue.Session{
+			ID:          coordSession.ID,
+			WorkspaceID: coordSession.WorkspaceID,
+			UserID:      coordSession.UserID,
+			WorkerID:    coordSession.WorkerID,
+			State:       taskqueue.SessionState(coordSession.State),
+		}
+	}
+
+	return result
+}
 
 const (
 	defaultSessionMaxAge  = 30 * time.Minute
@@ -55,7 +137,7 @@ func getPortConfig() (grpcPort, httpPort string) {
 }
 
 func initializeComponents(logger *slog.Logger) (
-	*coordinator.TaskQueue,
+	*taskqueue.TaskQueue,
 	*coordinator.MCPServer,
 	*coordinator.CoordinatorServer,
 	*coordinator.SessionManager,
@@ -67,15 +149,20 @@ func initializeComponents(logger *slog.Logger) (
 	workerClient := coordinator.NewRealWorkerClient(workerRegistry, sessionManager, logger)
 	auditLogger := coordinator.NewAuditLogger(logger)
 
-	retryPolicy := coordinator.DefaultRetryPolicy()
-	taskDispatcher := coordinator.NewTaskDispatcher(taskQueueStorage, workerClient, &retryPolicy)
-	taskQueue := coordinator.NewTaskQueue(
+	retryPolicy := taskqueue.DefaultRetryPolicy()
+
+	// Create simple adapters by embedding the types and overriding methods
+	workerClientAdapter := &workerClientAdapter{workerClient}
+	sessionManagerAdapter := &sessionManagerAdapter{sessionManager}
+
+	taskDispatcher := taskqueue.NewTaskDispatcher(taskQueueStorage, workerClientAdapter, &retryPolicy)
+	taskQueue := taskqueue.NewTaskQueue(
 		taskQueueStorage,
-		sessionManager,
-		workerClient,
+		sessionManagerAdapter,
+		workerClientAdapter,
 		taskDispatcher,
 		logger,
-		coordinator.DefaultTaskQueueConfig(),
+		taskqueue.DefaultTaskQueueConfig(),
 	)
 
 	cfg := coordinator.Config{
@@ -93,7 +180,7 @@ type serverConfig struct {
 	ctx            context.Context
 	cancel         context.CancelFunc
 	logger         *slog.Logger
-	taskQueue      *coordinator.TaskQueue
+	taskQueue      *taskqueue.TaskQueue
 	mcpServer      *coordinator.MCPServer
 	coordServer    *coordinator.CoordinatorServer
 	sessionManager *coordinator.SessionManager

@@ -2,8 +2,6 @@ syntax = "proto3";
 
 package codegen.v1;
 
-import "api/proto/v1/common.proto";
-
 option go_package = "github.com/altairalabs/codegen-mcp/api/proto/v1;protov1";
 
 // ArtifactService manages artifact storage and retrieval

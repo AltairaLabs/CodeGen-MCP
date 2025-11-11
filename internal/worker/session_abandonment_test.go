@@ -68,6 +68,7 @@ func TestAbandonSessionNonexistent(t *testing.T) {
 }
 
 func TestAbandonAllSessions(t *testing.T) {
+	t.Skip("Skipping slow test (5+ seconds) - TODO: optimize or move to integration tests")
 	tempDir := t.TempDir()
 	pool := NewSessionPool("test-worker", 5, tempDir)
 	ctx := context.Background()

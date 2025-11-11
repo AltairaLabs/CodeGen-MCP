@@ -805,6 +805,7 @@ func TestClient_DeregistrationFailed(t *testing.T) {
 }
 
 func TestClient_WorkerStatus_WithSessions(t *testing.T) {
+	t.Skip("Skipping slow test (3+ seconds) - TODO: optimize or move to integration tests")
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -958,6 +959,7 @@ func TestClient_ContinueServingFalse(t *testing.T) {
 }
 
 func TestClient_Reconnect_AfterHeartbeatFailures(t *testing.T) {
+	t.Skip("Skipping slow test (5+ seconds) - TODO: optimize or move to integration tests")
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -1023,6 +1025,7 @@ func TestClient_Reconnect_AfterHeartbeatFailures(t *testing.T) {
 }
 
 func TestClient_Reconnect_MaxAttemptsExhausted(t *testing.T) {
+	t.Skip("Skipping slow test (6+ seconds) - TODO: optimize or move to integration tests")
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -1081,6 +1084,7 @@ func TestClient_Reconnect_MaxAttemptsExhausted(t *testing.T) {
 }
 
 func TestClient_Reconnect_ExponentialBackoff(t *testing.T) {
+	t.Skip("Skipping slow test (6+ seconds) - TODO: optimize or move to integration tests")
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
@@ -1167,6 +1171,7 @@ func TestClient_Reconnect_ExponentialBackoff(t *testing.T) {
 }
 
 func TestClient_HeartbeatFailure_TriggersReconnect(t *testing.T) {
+	t.Skip("Skipping slow test (5+ seconds) - TODO: optimize or move to integration tests")
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}

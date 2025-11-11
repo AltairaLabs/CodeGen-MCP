@@ -215,3 +215,8 @@ func (sm *SessionManager) GetNextSequence(ctx context.Context, sessionID string)
 	}
 	return sequence
 }
+
+// SetLastCompletedSequence sets the last completed sequence for a session
+func (sm *SessionManager) SetLastCompletedSequence(ctx context.Context, sessionID string, sequence uint64) error {
+	return sm.storage.SetLastCompletedSequence(ctx, sessionID, sequence)
+}

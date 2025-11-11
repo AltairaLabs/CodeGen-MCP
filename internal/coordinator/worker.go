@@ -9,6 +9,9 @@ import (
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
+// sessionIDKey is the context key for session ID
+type sessionIDKey struct{}
+
 // AuditLogger handles audit logging for MCP tool calls
 type AuditLogger struct {
 	logger *slog.Logger

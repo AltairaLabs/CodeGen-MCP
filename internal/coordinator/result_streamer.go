@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/cache"
+	"github.com/AltairaLabs/codegen-mcp/internal/taskqueue"
 )
 
 // ResultStreamer manages streaming task results to SSE clients
@@ -74,8 +75,15 @@ func (rs *ResultStreamer) PublishResult(
 ) error {
 	// Cache the result first
 	if result.Result != nil {
-		adapter := NewTaskResultAdapter(result.Result)
-		if err := rs.resultCache.Store(ctx, taskID, adapter); err != nil {
+		// Convert coordinator TaskResult to taskqueue TaskResult
+		taskQueueResult := &taskqueue.TaskResult{
+			Success:  result.Result.Success,
+			Output:   result.Result.Output,
+			Error:    result.Result.Error,
+			ExitCode: result.Result.ExitCode,
+			Duration: result.Result.Duration,
+		}
+		if err := rs.resultCache.Store(ctx, taskID, taskQueueResult); err != nil {
 			rs.logger.Error("Failed to cache result",
 				"task_id", taskID,
 				"error", err,

@@ -42,7 +42,7 @@ func (cs *CoordinatorServer) TaskStream(stream protov1.WorkerLifecycle_TaskStrea
 	for {
 		select {
 		case <-ctx.Done():
-			cs.logger.Info("Task stream context cancelled", "worker_id", workerID)
+			cs.logger.Info("Task stream context canceled", "worker_id", workerID)
 			return ctx.Err()
 
 		case err := <-errChan:

@@ -237,3 +237,53 @@ func TestResultCacheConcurrent(t *testing.T) {
 		t.Errorf("Expected 10 cached results, got %d", cache.Size())
 	}
 }
+
+func TestCachedResult_GetResult(t *testing.T) {
+	mockResult := &mockTaskResult{
+		success: true,
+		output:  "test output",
+	}
+
+	cachedResult := &CachedResult{
+		Result:    mockResult,
+		CachedAt:  time.Now(),
+		ExpiresAt: time.Now().Add(5 * time.Minute),
+	}
+
+	result := cachedResult.GetResult()
+	if result == nil {
+		t.Fatal("Expected non-nil result")
+	}
+	if result.GetOutput() != "test output" {
+		t.Errorf("Expected output 'test output', got %s", result.GetOutput())
+	}
+}
+
+func TestCachedResult_GetCachedAt(t *testing.T) {
+	now := time.Now()
+	cachedResult := &CachedResult{
+		Result:    &mockTaskResult{},
+		CachedAt:  now,
+		ExpiresAt: now.Add(5 * time.Minute),
+	}
+
+	cachedAt := cachedResult.GetCachedAt()
+	if !cachedAt.Equal(now) {
+		t.Errorf("Expected CachedAt to be %v, got %v", now, cachedAt)
+	}
+}
+
+func TestCachedResult_GetExpiresAt(t *testing.T) {
+	now := time.Now()
+	expiresAt := now.Add(5 * time.Minute)
+	cachedResult := &CachedResult{
+		Result:    &mockTaskResult{},
+		CachedAt:  now,
+		ExpiresAt: expiresAt,
+	}
+
+	gotExpiresAt := cachedResult.GetExpiresAt()
+	if !gotExpiresAt.Equal(expiresAt) {
+		t.Errorf("Expected ExpiresAt to be %v, got %v", expiresAt, gotExpiresAt)
+	}
+}
