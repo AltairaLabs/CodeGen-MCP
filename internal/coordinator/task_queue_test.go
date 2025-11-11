@@ -620,4 +620,3 @@ func TestEnqueueTypedTaskAllTypes(t *testing.T) {
 		})
 	}
 }
-

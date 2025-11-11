@@ -1423,7 +1423,7 @@ func TestGetToolNameFromRequest(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-if result := getToolNameFromRequest(tt.request); result != tt.expected {
+			if result := getToolNameFromRequest(tt.request); result != tt.expected {
 				t.Errorf("got %q, want %q", result, tt.expected)
 			}
 		})

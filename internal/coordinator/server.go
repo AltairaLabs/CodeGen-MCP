@@ -204,7 +204,11 @@ func (ms *MCPServer) getSessionID(ctx context.Context) string {
 	if clientSession != nil {
 		return clientSession.SessionID()
 	}
-	// Fallback for stdio transport or testing
+	// Fallback for stdio transport or testing - try struct key first
+	if sessionID, ok := ctx.Value(sessionIDKey{}).(string); ok {
+		return sessionID
+	}
+	// Fallback for legacy string key
 	sessionID, ok := ctx.Value("session_id").(string)
 	if !ok {
 		return "default-session"
