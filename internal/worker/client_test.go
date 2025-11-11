@@ -1405,3 +1405,47 @@ func BenchmarkClient_Heartbeat(b *testing.B) {
 		_, _ = lifecycleClient.Heartbeat(ctx, req)
 	}
 }
+
+func TestGetToolNameFromRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		request  *protov1.ToolRequest
+		expected string
+	}{
+		{"nil request", nil, "unknown"},
+		{"echo request", &protov1.ToolRequest{Request: &protov1.ToolRequest_Echo{Echo: &protov1.EchoRequest{Message: "test"}}}, "echo"},
+		{"fs.read request", &protov1.ToolRequest{Request: &protov1.ToolRequest_FsRead{FsRead: &protov1.FsReadRequest{Path: "file.txt"}}}, "fs.read"},
+		{"fs.write request", &protov1.ToolRequest{Request: &protov1.ToolRequest_FsWrite{FsWrite: &protov1.FsWriteRequest{Path: "file.txt", Contents: "data"}}}, "fs.write"},
+		{"fs.list request", &protov1.ToolRequest{Request: &protov1.ToolRequest_FsList{FsList: &protov1.FsListRequest{Path: "."}}}, "fs.list"},
+		{"run.python request", &protov1.ToolRequest{Request: &protov1.ToolRequest_RunPython{RunPython: &protov1.RunPythonRequest{Source: &protov1.RunPythonRequest_Code{Code: "print('test')"}}}}, "run.python"},
+		{"pkg.install request", &protov1.ToolRequest{Request: &protov1.ToolRequest_PkgInstall{PkgInstall: &protov1.PkgInstallRequest{Packages: []string{"requests"}}}}, "pkg.install"},
+		{"empty request", &protov1.ToolRequest{}, "unknown"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+if result := getToolNameFromRequest(tt.request); result != tt.expected {
+				t.Errorf("got %q, want %q", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestClientStopAndGetWorkerStatus(t *testing.T) {
+	tempDir := t.TempDir()
+	client := NewClient(&Config{WorkerID: "test", CoordinatorAddr: "localhost:5000", Version: "0.1.0", MaxSessions: 5, BaseWorkspace: tempDir, Logger: slog.Default()})
+	ctx := context.Background()
+	if err := client.Stop(ctx); err != nil {
+		t.Errorf("Stop() should not error: %v", err)
+	}
+	if err := client.Stop(ctx); err != nil {
+		t.Errorf("Second Stop() should not error: %v", err)
+	}
+	status := client.getWorkerStatus(&protov1.SessionCapacity{ActiveSessions: 0, Sessions: []*protov1.SessionInfo{}})
+	if status.State != protov1.WorkerStatus_STATE_IDLE {
+		t.Errorf("Expected IDLE state")
+	}
+	status = client.getWorkerStatus(&protov1.SessionCapacity{ActiveSessions: 2, Sessions: []*protov1.SessionInfo{{SessionId: "s1", ActiveTasks: 3}, {SessionId: "s2", ActiveTasks: 2}}})
+	if status.State != protov1.WorkerStatus_STATE_BUSY || status.ActiveTasks != 5 {
+		t.Errorf("Expected BUSY state with 5 tasks")
+	}
+}
