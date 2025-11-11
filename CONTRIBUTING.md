@@ -222,6 +222,43 @@ cd internal/sandbox && go test ./...
 - Write integration tests for complex workflows
 - Test concurrent scenarios and race conditions
 
+#### Code Coverage Requirements
+
+This project maintains code coverage requirements to ensure code quality:
+
+- **Minimum Coverage**: 80% for all production code
+- **Coverage Generation**: Use `make coverage` to generate reports
+- **Coverage Exclusions**: The following files are excluded from coverage requirements:
+  - Generated protobuf files: `**/*.pb.go`, `**/*_grpc.pb.go`
+  - Application entry points: `cmd/*/main.go`
+  - Infrastructure coordination code:
+    - `**/*_serve.go`: HTTP/gRPC server startup code
+    - `**/*_streams.go`: Bidirectional gRPC stream handling
+    - `**/*_loops.go`: Infinite event loops
+    - `**/*_dispatch.go`: Goroutine/channel orchestration
+    - `**/*_integration.go`: Integration test helpers
+  - Example and test files: `**/examples/**`, `**/*_test.go`
+
+These exclusions are defined in `sonar-project.properties` under `sonar.coverage.exclusions`.
+
+#### Running Coverage Tests
+
+```bash
+# Generate coverage report for unit tests only
+make coverage
+
+# View coverage report in browser
+open coverage.html
+
+# Run unit tests with coverage output
+make test-unit
+
+# Check coverage percentage
+go tool cover -func=coverage.out | grep "^total:"
+```
+
+**Note**: Coverage excludes integration tests and infrastructure code that's difficult to unit test meaningfully.
+
 ### Documentation
 
 - Update README.md if adding features

@@ -250,7 +250,7 @@ func (te *TaskExecutor) handleRunPythonTyped(ctx context.Context, session *Worke
 	if session.Provider == nil || !session.Provider.Supports("run.python") {
 		return &protov1.TaskResult{
 			Status: protov1.TaskResult_STATUS_FAILURE,
-		}, fmt.Errorf("Python execution not supported by session provider")
+		}, fmt.Errorf("python execution not supported by session provider")
 	}
 
 	slog.Debug("run.python operation",
@@ -313,7 +313,7 @@ func (te *TaskExecutor) handlePkgInstallTyped(ctx context.Context, session *Work
 	if session.Provider == nil || !session.Provider.Supports("pip.install") {
 		return &protov1.TaskResult{
 			Status: protov1.TaskResult_STATUS_FAILURE,
-		}, fmt.Errorf("Package installation not supported by session provider")
+		}, fmt.Errorf("package installation not supported by session provider")
 	}
 
 	slog.Debug("pkg.install operation",

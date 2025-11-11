@@ -17,6 +17,7 @@ import (
 const (
 	defaultMaxRecentTasks   = 10
 	defaultWorkspaceDirPerm = 0755
+	errSessionNotFoundMsg   = "session not found: %s"
 )
 
 // SessionPool manages multiple isolated sessions on a single worker
@@ -123,10 +124,8 @@ func (sp *SessionPool) CreateSessionWithID(ctx context.Context, sessionID, works
 
 	// Initialize metadata with provided values
 	sessionMetadata := make(map[string]string)
-	if metadata != nil {
-		for k, v := range metadata {
-			sessionMetadata[k] = v
-		}
+	for k, v := range metadata {
+		sessionMetadata[k] = v
 	}
 
 	// Initialize session
@@ -228,7 +227,7 @@ func (sp *SessionPool) GetSession(sessionID string) (*WorkerSession, error) {
 
 	session, exists := sp.sessions[sessionID]
 	if !exists {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+		return nil, fmt.Errorf(errSessionNotFoundMsg, sessionID)
 	}
 	return session, nil
 }
@@ -239,7 +238,7 @@ func (sp *SessionPool) DestroySession(ctx context.Context, sessionID string, sav
 	session, exists := sp.sessions[sessionID]
 	if !exists {
 		sp.mu.Unlock()
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf(errSessionNotFoundMsg, sessionID)
 	}
 	delete(sp.sessions, sessionID)
 	sp.mu.Unlock()
@@ -434,7 +433,7 @@ func (sp *SessionPool) GetLastCompletedSequence(sessionID string) (uint64, error
 	sp.mu.RUnlock()
 
 	if !exists {
-		return 0, fmt.Errorf("session not found: %s", sessionID)
+		return 0, fmt.Errorf(errSessionNotFoundMsg, sessionID)
 	}
 
 	session.mu.RLock()
@@ -449,7 +448,7 @@ func (sp *SessionPool) SetLastCompletedSequence(sessionID string, sequence uint6
 	sp.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf(errSessionNotFoundMsg, sessionID)
 	}
 
 	session.mu.Lock()
@@ -465,7 +464,7 @@ func (sp *SessionPool) GetSessionMetadata(sessionID string) (map[string]string, 
 	sp.mu.RUnlock()
 
 	if !exists {
-		return nil, fmt.Errorf("session not found: %s", sessionID)
+		return nil, fmt.Errorf(errSessionNotFoundMsg, sessionID)
 	}
 
 	session.mu.RLock()
@@ -486,7 +485,7 @@ func (sp *SessionPool) SetSessionMetadata(sessionID string, metadata map[string]
 	sp.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf(errSessionNotFoundMsg, sessionID)
 	}
 
 	session.mu.Lock()
@@ -507,7 +506,7 @@ func (sp *SessionPool) UpdateSessionMetadata(sessionID string, updates map[strin
 	sp.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("session not found: %s", sessionID)
+		return fmt.Errorf(errSessionNotFoundMsg, sessionID)
 	}
 
 	session.mu.Lock()

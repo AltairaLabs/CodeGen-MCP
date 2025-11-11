@@ -12,6 +12,11 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const sessionIDKey contextKey = "session_id"
+
 // MockTaskQueue implements TaskQueueInterface for testing
 // It synchronously executes tasks like the old behavior
 type MockTaskQueue struct {

@@ -173,6 +173,8 @@ func TestTaskExecutorMutex(t *testing.T) {
 
 	go func() {
 		executor.mu.Lock()
+		// Verify we can access the map safely
+		_ = len(executor.activeTasks)
 		executor.mu.Unlock()
 		done <- true
 	}()
