@@ -6,7 +6,7 @@ import (
 	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage"
 	"google.golang.org/protobuf/proto"
 )
 

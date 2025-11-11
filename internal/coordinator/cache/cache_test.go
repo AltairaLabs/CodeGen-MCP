@@ -1,10 +1,25 @@
-package coordinator
+package cache
 
 import (
 	"context"
 	"testing"
 	"time"
 )
+
+// mockTaskResult implements TaskResultInterface for testing
+type mockTaskResult struct {
+	success  bool
+	output   string
+	error    string
+	exitCode int
+	duration time.Duration
+}
+
+func (m *mockTaskResult) GetSuccess() bool           { return m.success }
+func (m *mockTaskResult) GetOutput() string          { return m.output }
+func (m *mockTaskResult) GetError() string           { return m.error }
+func (m *mockTaskResult) GetExitCode() int           { return m.exitCode }
+func (m *mockTaskResult) GetDuration() time.Duration { return m.duration }
 
 func TestNewResultCache(t *testing.T) {
 	cache := NewResultCache(5 * time.Minute)
@@ -24,12 +39,10 @@ func TestResultCacheStoreAndGet(t *testing.T) {
 	ctx := context.Background()
 
 	taskID := "test-task-123"
-	result := &TaskResult{
-		Output: "test result",
-		Error:  "",
-	}
-
-	// Store result
+	result := &mockTaskResult{
+		success: true,
+		output:  "test output",
+	} // Store result
 	err := cache.Store(ctx, taskID, result)
 	if err != nil {
 		t.Fatalf("Failed to store result: %v", err)
@@ -43,8 +56,8 @@ func TestResultCacheStoreAndGet(t *testing.T) {
 	if retrieved == nil {
 		t.Fatal("Expected non-nil result")
 	}
-	if retrieved.Output != result.Output {
-		t.Errorf("Expected output %s, got %s", result.Output, retrieved.Output)
+	if retrieved.GetOutput() != result.GetOutput() {
+		t.Errorf("Expected output %s, got %s", result.GetOutput(), retrieved.GetOutput())
 	}
 }
 
@@ -66,8 +79,8 @@ func TestResultCacheDelete(t *testing.T) {
 	ctx := context.Background()
 
 	taskID := "test-task-delete"
-	result := &TaskResult{
-		Output: "test",
+	result := &mockTaskResult{
+		output: "test",
 	}
 
 	// Store and verify
@@ -91,8 +104,8 @@ func TestResultCacheExpiration(t *testing.T) {
 	ctx := context.Background()
 
 	taskID := "test-task-expire"
-	result := &TaskResult{
-		Output: "expires soon",
+	result := &mockTaskResult{
+		output: "expires soon",
 	}
 
 	// Store result
@@ -119,7 +132,7 @@ func TestResultCacheCleanup(t *testing.T) {
 	// Add multiple results
 	for i := 0; i < 5; i++ {
 		taskID := "task-" + string(rune('0'+i))
-		result := &TaskResult{Output: "test"}
+		result := &mockTaskResult{output: "test"}
 		_ = cache.Store(ctx, taskID, result)
 	}
 
@@ -151,7 +164,7 @@ func TestResultCacheSize(t *testing.T) {
 	// Add results
 	for i := 0; i < 3; i++ {
 		taskID := "task-" + string(rune('0'+i))
-		result := &TaskResult{Output: "test"}
+		result := &mockTaskResult{output: "test"}
 		_ = cache.Store(ctx, taskID, result)
 	}
 
@@ -167,7 +180,7 @@ func TestResultCacheClear(t *testing.T) {
 	// Add results
 	for i := 0; i < 5; i++ {
 		taskID := "task-" + string(rune('0'+i))
-		result := &TaskResult{Output: "test"}
+		result := &mockTaskResult{output: "test"}
 		_ = cache.Store(ctx, taskID, result)
 	}
 
@@ -208,7 +221,7 @@ func TestResultCacheConcurrent(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		go func(id int) {
 			taskID := "task-" + string(rune('0'+id))
-			result := &TaskResult{Output: "test"}
+			result := &mockTaskResult{output: "test"}
 			_ = cache.Store(ctx, taskID, result)
 			done <- true
 		}(i)

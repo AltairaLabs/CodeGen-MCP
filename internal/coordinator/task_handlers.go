@@ -17,7 +17,7 @@ func (ms *MCPServer) handleGetTaskResult(ctx context.Context, request mcp.CallTo
 	}
 
 	// Try to get result from cache
-	result, err := ms.resultCache.Get(ctx, taskID)
+	cachedResult, err := ms.resultCache.Get(ctx, taskID)
 	if err != nil {
 		// Result not ready or not found
 		// Check task status in storage
@@ -40,7 +40,7 @@ func (ms *MCPServer) handleGetTaskResult(ctx context.Context, request mcp.CallTo
 	}
 
 	// Result is ready, return it
-	return mcp.NewToolResultText(result.Output), nil
+	return mcp.NewToolResultText(cachedResult.GetOutput()), nil
 }
 
 // handleGetTaskStatus checks the current status of a task

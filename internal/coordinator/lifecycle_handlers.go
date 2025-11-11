@@ -9,6 +9,7 @@ import (
 	"google.golang.org/grpc"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/config"
 )
 
 // CoordinatorServer implements the gRPC services for the coordinator
@@ -70,8 +71,7 @@ func (cs *CoordinatorServer) RegisterWorker(
 
 	// Register the worker - task stream will be established separately via TaskStream RPC
 	sessionID := fmt.Sprintf("reg-%s-%d", req.WorkerId, time.Now().UnixNano())
-	const defaultHeartbeatInterval = 30 * time.Second
-	heartbeatInterval := defaultHeartbeatInterval
+	heartbeatInterval := config.DefaultHeartbeatInterval
 
 	cs.logger.Info("Registering worker without task stream (will be established via TaskStream RPC)",
 		"worker_id", req.WorkerId)
@@ -274,7 +274,7 @@ func (cs *CoordinatorServer) StartCleanupLoop(ctx context.Context, interval time
 			cs.logger.Info("Cleanup loop stopping")
 			return
 		case <-ticker.C:
-			const workerStaleTimeout = 5 * time.Minute
+			const workerStaleTimeout = config.DefaultWorkerStaleTimeout
 			removed := cs.workerRegistry.CleanupStaleWorkers(workerStaleTimeout)
 			if removed > 0 {
 				cs.logger.Info("Cleaned up stale workers", "count", removed)

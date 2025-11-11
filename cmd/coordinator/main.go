@@ -14,7 +14,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator"
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage/memory"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage/memory"
 )
 
 const (

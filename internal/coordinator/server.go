@@ -7,27 +7,31 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/cache"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/config"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
+// Legacy constants for backward compatibility
+// These should eventually be replaced with direct config package usage
 const (
-	// Tool names
-	toolEcho          = "echo"
-	toolFsRead        = "fs.read"
-	toolFsWrite       = "fs.write"
-	toolFsList        = "fs.list"
-	toolRunPython     = "run.python"
-	toolPkgInstall    = "pkg.install"
-	toolGetTaskResult = "task.get_result"
-	toolGetTaskStatus = "task.get_status"
+	// Tool names - use config.Tool* constants instead
+	toolEcho          = config.ToolEcho
+	toolFsRead        = config.ToolFsRead
+	toolFsWrite       = config.ToolFsWrite
+	toolFsList        = config.ToolFsList
+	toolRunPython     = config.ToolRunPython
+	toolPkgInstall    = config.ToolPkgInstall
+	toolGetTaskResult = config.ToolGetTaskResult
+	toolGetTaskStatus = config.ToolGetTaskStatus
 
-	// Error messages
-	errSessionError   = "session error: %v"
-	errNoWorkersAvail = "no workers available to handle request"
+	// Error messages - use config.Err* constants instead
+	errSessionError   = config.ErrSessionError
+	errNoWorkersAvail = config.ErrNoWorkersAvail
 
-	// Task status messages
-	msgTaskQueued = "Task %s queued for execution"
+	// Task status messages - use config.Msg* constants instead
+	msgTaskQueued = config.MsgTaskQueued
 )
 
 // sessionIDKey is the context key for session ID
@@ -46,7 +50,7 @@ type MCPServer struct {
 	auditLogger    *AuditLogger
 	taskQueue      TaskQueueInterface
 	resultStreamer *ResultStreamer
-	resultCache    *ResultCache
+	resultCache    cache.CacheInterface
 	sseManager     *SSESessionManager
 }
 
@@ -67,7 +71,7 @@ func NewMCPServer(cfg Config, sessionMgr *SessionManager, worker WorkerClient, a
 	)
 
 	// Initialize async result streaming components
-	resultCache := NewResultCache(5 * 60 * 1000000000) // 5 minutes TTL
+	resultCache := cache.NewResultCache(config.DefaultCacheTTL) // Default cache TTL from config
 	sseManager := NewSSESessionManager()
 	logger := slog.Default()
 	resultStreamer := NewResultStreamer(sseManager, resultCache, logger)

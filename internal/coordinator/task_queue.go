@@ -8,7 +8,8 @@ import (
 	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/config"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -60,18 +61,12 @@ type TaskQueue struct {
 	maxDispatchBatch int
 }
 
-// TaskQueueConfig holds configuration for TaskQueue
-type TaskQueueConfig struct {
-	DispatchInterval time.Duration // How often to check for ready tasks
-	MaxDispatchBatch int           // Max tasks to dispatch per cycle
-}
+// TaskQueueConfig is an alias to the config package type for backward compatibility
+type TaskQueueConfig = config.TaskQueueConfig
 
 // DefaultTaskQueueConfig returns default configuration
 func DefaultTaskQueueConfig() TaskQueueConfig {
-	return TaskQueueConfig{
-		DispatchInterval: 100 * time.Millisecond,
-		MaxDispatchBatch: 10,
-	}
+	return config.DefaultTaskQueueConfig()
 }
 
 // NewTaskQueue creates a new task queue manager

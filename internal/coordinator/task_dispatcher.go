@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage"
 )
 
 // TaskDispatcher handles task dispatch with retry logic

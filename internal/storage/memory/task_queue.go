@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage"
 )
 
 var (

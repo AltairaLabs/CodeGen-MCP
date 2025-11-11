@@ -1,10 +1,15 @@
-package coordinator
+package cache
 
 import (
 	"context"
 	"fmt"
 	"sync"
 	"time"
+)
+
+const (
+	// ErrEmptyTaskID is returned when a task ID is empty
+	ErrEmptyTaskID = "taskID cannot be empty"
 )
 
 // ResultCache caches task results for retrieval with TTL-based expiration
@@ -17,9 +22,24 @@ type ResultCache struct {
 
 // CachedResult represents a cached task result with expiration metadata
 type CachedResult struct {
-	Result    *TaskResult
+	Result    TaskResultInterface
 	CachedAt  time.Time
 	ExpiresAt time.Time
+}
+
+// GetResult implements CachedResultInterface
+func (cr *CachedResult) GetResult() TaskResultInterface {
+	return cr.Result
+}
+
+// GetCachedAt implements CachedResultInterface
+func (cr *CachedResult) GetCachedAt() time.Time {
+	return cr.CachedAt
+}
+
+// GetExpiresAt implements CachedResultInterface
+func (cr *CachedResult) GetExpiresAt() time.Time {
+	return cr.ExpiresAt
 }
 
 // NewResultCache creates a new result cache with the specified TTL
@@ -38,7 +58,15 @@ func NewResultCache(ttl time.Duration) *ResultCache {
 }
 
 // Store caches a task result with the configured TTL
-func (rc *ResultCache) Store(ctx context.Context, taskID string, result *TaskResult) error {
+func (rc *ResultCache) Store(ctx context.Context, taskID string, result TaskResultInterface) error {
+	if taskID == "" {
+		return fmt.Errorf(ErrEmptyTaskID)
+	}
+
+	if result == nil {
+		return fmt.Errorf("result cannot be nil")
+	}
+
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
 
@@ -52,8 +80,13 @@ func (rc *ResultCache) Store(ctx context.Context, taskID string, result *TaskRes
 	return nil
 }
 
-// Get retrieves a cached result if available and not expired
-func (rc *ResultCache) Get(ctx context.Context, taskID string) (*TaskResult, error) {
+// Get gets a cached task result by task ID
+// Returns the result and any error, returns error if not found or expired
+func (rc *ResultCache) Get(ctx context.Context, taskID string) (TaskResultInterface, error) {
+	if taskID == "" {
+		return nil, fmt.Errorf(ErrEmptyTaskID)
+	}
+
 	rc.mu.RLock()
 	defer rc.mu.RUnlock()
 
@@ -62,7 +95,7 @@ func (rc *ResultCache) Get(ctx context.Context, taskID string) (*TaskResult, err
 		return nil, fmt.Errorf("result not found: %s", taskID)
 	}
 
-	// Check expiration
+	// Check if expired
 	if time.Now().After(cached.ExpiresAt) {
 		return nil, fmt.Errorf("result expired: %s", taskID)
 	}
@@ -70,10 +103,15 @@ func (rc *ResultCache) Get(ctx context.Context, taskID string) (*TaskResult, err
 	return cached.Result, nil
 }
 
-// Delete removes a cached result
+// Delete removes a cached result by task ID
 func (rc *ResultCache) Delete(ctx context.Context, taskID string) {
+	if taskID == "" {
+		return // silently ignore empty taskID for compatibility
+	}
+
 	rc.mu.Lock()
 	defer rc.mu.Unlock()
+
 	delete(rc.results, taskID)
 }
 

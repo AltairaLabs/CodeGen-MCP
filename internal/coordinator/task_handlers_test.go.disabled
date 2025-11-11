@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/cache"
-	"github.com/AltairaLabs/codegen-mcp/internal/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -40,8 +40,8 @@ func TestHandleGetTaskResultResultReady(t *testing.T) {
 
 	// Pre-populate cache with result
 	taskID := "id1"
-	taskResult := &TaskResult{Output: "hello world"}
-	adapter := NewTaskResultAdapter(taskResult)
+	result := &TaskResult{Output: "hello world"}
+	adapter := NewTaskResultAdapter(result)
 	_ = cache.Store(context.Background(), taskID, adapter)
 
 	ms := &MCPServer{
@@ -76,7 +76,7 @@ func TestHandleGetTaskResultResultReady(t *testing.T) {
 
 func TestHandleGetTaskResultNotReadyReturnsStatus(t *testing.T) {
 	now := time.Now()
-	cache := cache.NewResultCache(5 * time.Minute)
+	cache := NewResultCache(5 * time.Minute)
 
 	queue := &mockTaskQueueWithStorage{
 		MockTaskQueue: &MockTaskQueue{},
@@ -121,7 +121,7 @@ func TestHandleGetTaskResultNotReadyReturnsStatus(t *testing.T) {
 }
 
 func TestHandleGetTaskResultTaskNotFound(t *testing.T) {
-	cache := cache.NewResultCache(5 * time.Minute)
+	cache := NewResultCache(5 * time.Minute)
 
 	queue := &mockTaskQueueWithStorage{
 		MockTaskQueue: &MockTaskQueue{},

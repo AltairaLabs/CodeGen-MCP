@@ -1,7 +1,9 @@
-package coordinator
+package tools
 
 import (
 	"testing"
+
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/config"
 )
 
 func TestNewToolParserRegistry(t *testing.T) {
@@ -17,12 +19,12 @@ func TestNewToolParserRegistry(t *testing.T) {
 
 	// Verify all expected parsers are registered
 	expectedTools := []string{
-		toolEcho,
-		toolFsRead,
-		toolFsWrite,
-		toolFsList,
-		toolRunPython,
-		toolPkgInstall,
+		config.ToolEcho,
+		config.ToolFsRead,
+		config.ToolFsWrite,
+		config.ToolFsList,
+		config.ToolRunPython,
+		config.ToolPkgInstall,
 	}
 
 	for _, tool := range expectedTools {
@@ -32,30 +34,30 @@ func TestNewToolParserRegistry(t *testing.T) {
 	}
 
 	// Verify correct parser types
-	if _, ok := registry.parsers[toolEcho].(*EchoParser); !ok {
-		t.Error("Expected EchoParser for toolEcho")
+	if _, ok := registry.parsers[config.ToolEcho].(*EchoParser); !ok {
+		t.Error("Expected EchoParser for config.ToolEcho")
 	}
-	if _, ok := registry.parsers[toolFsRead].(*FsReadParser); !ok {
-		t.Error("Expected FsReadParser for toolFsRead")
+	if _, ok := registry.parsers[config.ToolFsRead].(*FsReadParser); !ok {
+		t.Error("Expected FsReadParser for config.ToolFsRead")
 	}
-	if _, ok := registry.parsers[toolFsWrite].(*FsWriteParser); !ok {
-		t.Error("Expected FsWriteParser for toolFsWrite")
+	if _, ok := registry.parsers[config.ToolFsWrite].(*FsWriteParser); !ok {
+		t.Error("Expected FsWriteParser for config.ToolFsWrite")
 	}
-	if _, ok := registry.parsers[toolFsList].(*FsListParser); !ok {
-		t.Error("Expected FsListParser for toolFsList")
+	if _, ok := registry.parsers[config.ToolFsList].(*FsListParser); !ok {
+		t.Error("Expected FsListParser for config.ToolFsList")
 	}
-	if _, ok := registry.parsers[toolRunPython].(*RunPythonParser); !ok {
-		t.Error("Expected RunPythonParser for toolRunPython")
+	if _, ok := registry.parsers[config.ToolRunPython].(*RunPythonParser); !ok {
+		t.Error("Expected RunPythonParser for config.ToolRunPython")
 	}
-	if _, ok := registry.parsers[toolPkgInstall].(*PkgInstallParser); !ok {
-		t.Error("Expected PkgInstallParser for toolPkgInstall")
+	if _, ok := registry.parsers[config.ToolPkgInstall].(*PkgInstallParser); !ok {
+		t.Error("Expected PkgInstallParser for config.ToolPkgInstall")
 	}
 }
 
 func TestGetParser_ValidTool(t *testing.T) {
 	registry := NewToolParserRegistry()
 
-	parser, err := registry.GetParser(toolEcho)
+	parser, err := registry.GetParser(config.ToolEcho)
 
 	if err != nil {
 		t.Errorf("Expected no error for valid tool, got %v", err)
@@ -93,12 +95,12 @@ func TestGetParser_AllRegisteredTools(t *testing.T) {
 		name       string
 		parserType interface{}
 	}{
-		{toolEcho, &EchoParser{}},
-		{toolFsRead, &FsReadParser{}},
-		{toolFsWrite, &FsWriteParser{}},
-		{toolFsList, &FsListParser{}},
-		{toolRunPython, &RunPythonParser{}},
-		{toolPkgInstall, &PkgInstallParser{}},
+		{config.ToolEcho, &EchoParser{}},
+		{config.ToolFsRead, &FsReadParser{}},
+		{config.ToolFsWrite, &FsWriteParser{}},
+		{config.ToolFsList, &FsListParser{}},
+		{config.ToolRunPython, &RunPythonParser{}},
+		{config.ToolPkgInstall, &PkgInstallParser{}},
 	}
 
 	for _, tt := range tools {

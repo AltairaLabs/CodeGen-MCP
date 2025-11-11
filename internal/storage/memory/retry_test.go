@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage"
 )
 
 func TestGetTasksReadyForRetry(t *testing.T) {

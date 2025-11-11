@@ -6,6 +6,7 @@ import (
 	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+	"github.com/AltairaLabs/codegen-mcp/internal/tools"
 )
 
 // This file contains untestable gRPC stream handling infrastructure that has been
@@ -139,7 +140,7 @@ func (r *RealWorkerClient) buildTaskResultFromStream(
 	}
 
 	// Get the parser for this tool
-	parserRegistry := NewToolParserRegistry()
+	parserRegistry := tools.NewToolParserRegistry()
 	parser, err := parserRegistry.GetParser(toolName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get parser for tool %s: %w", toolName, err)

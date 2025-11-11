@@ -1,9 +1,10 @@
-package coordinator
+package tools
 
 import (
 	"fmt"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/config"
 )
 
 // ToolResultParser knows how to parse worker responses for a specific tool
@@ -21,12 +22,12 @@ type ToolParserRegistry struct {
 func NewToolParserRegistry() *ToolParserRegistry {
 	return &ToolParserRegistry{
 		parsers: map[string]ToolResultParser{
-			toolEcho:       &EchoParser{},
-			toolFsRead:     &FsReadParser{},
-			toolFsWrite:    &FsWriteParser{},
-			toolFsList:     &FsListParser{},
-			toolRunPython:  &RunPythonParser{},
-			toolPkgInstall: &PkgInstallParser{},
+			config.ToolEcho:       &EchoParser{},
+			config.ToolFsRead:     &FsReadParser{},
+			config.ToolFsWrite:    &FsWriteParser{},
+			config.ToolFsList:     &FsListParser{},
+			config.ToolRunPython:  &RunPythonParser{},
+			config.ToolPkgInstall: &PkgInstallParser{},
 		},
 	}
 }

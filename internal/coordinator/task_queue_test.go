@@ -10,7 +10,8 @@ import (
 	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
-	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/cache"
+	"github.com/AltairaLabs/codegen-mcp/internal/storage"
 )
 
 const (
@@ -410,7 +411,7 @@ func TestSetResultStreamer(t *testing.T) {
 
 	// Create a result streamer
 	sseManager := NewSSESessionManager()
-	cache := NewResultCache(5 * time.Minute)
+	cache := cache.NewResultCache(5 * time.Minute)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
 	streamer := NewResultStreamer(sseManager, cache, logger)
 

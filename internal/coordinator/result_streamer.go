@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/cache"
 )
 
 // ResultStreamer manages streaming task results to SSE clients
 type ResultStreamer struct {
 	sseManager  *SSESessionManager
-	resultCache *ResultCache
+	resultCache cache.CacheInterface
 	logger      *slog.Logger
 
 	// Subscriptions: taskID -> list of session IDs waiting for result
@@ -21,7 +23,7 @@ type ResultStreamer struct {
 // NewResultStreamer creates a new result streamer
 func NewResultStreamer(
 	sseMgr *SSESessionManager,
-	resultCache *ResultCache,
+	resultCache cache.CacheInterface,
 	logger *slog.Logger,
 ) *ResultStreamer {
 	return &ResultStreamer{
@@ -72,7 +74,8 @@ func (rs *ResultStreamer) PublishResult(
 ) error {
 	// Cache the result first
 	if result.Result != nil {
-		if err := rs.resultCache.Store(ctx, taskID, result.Result); err != nil {
+		adapter := NewTaskResultAdapter(result.Result)
+		if err := rs.resultCache.Store(ctx, taskID, adapter); err != nil {
 			rs.logger.Error("Failed to cache result",
 				"task_id", taskID,
 				"error", err,
