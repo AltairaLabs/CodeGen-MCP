@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -154,6 +155,80 @@ func TestHandleGetTaskResultTaskNotFound(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Error("expected IsError to be true")
+	}
+}
+
+func TestTaskQueueGetTaskResultSuccess(t *testing.T) {
+	// Test GetTaskResult success path with channel cleanup
+	tq := &TaskQueue{
+		storage:        nil, // Not needed for this test
+		resultChannels: make(map[string]chan *TaskResult),
+		resultMu:       sync.RWMutex{},
+	}
+
+	taskID := "success-task"
+	resultChan := make(chan *TaskResult, 1)
+	tq.resultChannels[taskID] = resultChan
+
+	// Send a result
+	expectedResult := &TaskResult{
+		Success:  true,
+		Output:   "test output",
+		ExitCode: 0,
+	}
+	resultChan <- expectedResult
+
+	// Call GetTaskResult - should receive result and cleanup channel
+	result, err := tq.GetTaskResult(context.Background(), taskID)
+	if err != nil {
+		t.Errorf("expected no error, got %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected result, got nil")
+	}
+	if result.Output != "test output" {
+		t.Errorf("expected output 'test output', got %s", result.Output)
+	}
+
+	// Verify channel was cleaned up
+	tq.resultMu.RLock()
+	_, exists := tq.resultChannels[taskID]
+	tq.resultMu.RUnlock()
+	if exists {
+		t.Error("expected result channel to be cleaned up after receiving result")
+	}
+}
+
+func TestTaskQueueGetTaskResultTimeout(t *testing.T) {
+	// Test GetTaskResult ctx.Done() path
+	tq := &TaskQueue{
+		storage:        nil, // Not needed for this test
+		resultChannels: make(map[string]chan *TaskResult),
+		resultMu:       sync.RWMutex{},
+	}
+
+	// Create a task with result channel that never sends
+	taskID := "timeout-task"
+	resultChan := make(chan *TaskResult)
+	tq.resultChannels[taskID] = resultChan
+
+	// Create context with immediate timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Millisecond)
+	defer cancel()
+
+	// Wait for context to expire
+	time.Sleep(5 * time.Millisecond)
+
+	// Call GetTaskResult - should return ctx error
+	result, err := tq.GetTaskResult(ctx, taskID)
+	if err == nil {
+		t.Error("expected timeout error")
+	}
+	if result != nil {
+		t.Errorf("expected nil result on timeout, got %v", result)
+	}
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Errorf("expected DeadlineExceeded error, got %v", err)
 	}
 }
 

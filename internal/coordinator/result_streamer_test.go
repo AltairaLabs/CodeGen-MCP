@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -169,6 +170,32 @@ func TestResultStreamer_PublishProgress_NoSubscribers(t *testing.T) {
 	}
 }
 
+func TestResultStreamer_PublishProgress_WithSubscribersError(t *testing.T) {
+	sseManager := NewSSESessionManager()
+	cache := NewResultCache(5 * time.Minute)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	streamer := NewResultStreamer(sseManager, cache, logger)
+
+	// Subscribe sessions that don't exist (will cause sendNotification to fail)
+	streamer.Subscribe("task-1", "nonexistent-session-1")
+	streamer.Subscribe("task-1", "nonexistent-session-2")
+
+	// Publish progress - should fail to send to nonexistent sessions
+	progress := &TaskProgress{
+		Stage:      "processing",
+		Percentage: 50,
+		Message:    "halfway done",
+	}
+
+	err := streamer.PublishProgress(context.Background(), "task-1", progress)
+	if err == nil {
+		t.Error("Expected error when sending to nonexistent sessions")
+	}
+	if !strings.Contains(err.Error(), "failed to send") {
+		t.Errorf("Expected error message about failed notifications, got: %v", err)
+	}
+}
+
 func TestResultStreamer_GetSubscriberCount(t *testing.T) {
 	sseManager := NewSSESessionManager()
 	cache := NewResultCache(5 * time.Minute)
@@ -212,6 +239,40 @@ func TestResultStreamer_ClearSubscriptions(t *testing.T) {
 
 	if count != 0 {
 		t.Errorf("Expected 0 subscriptions after clear, got %d", count)
+	}
+}
+
+func TestResultStreamer_SendNotification_Success(t *testing.T) {
+	sseManager := NewSSESessionManager()
+	cache := NewResultCache(5 * time.Minute)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelError}))
+	streamer := NewResultStreamer(sseManager, cache, logger)
+
+	// Create an SSE session with channel sender
+	sessionID := "test-session-1"
+	notifChan := make(chan string, 10)
+	sender := NewChannelNotificationSender(notifChan)
+	sseManager.RegisterSession(sessionID, sender)
+
+	// Send notification to existing session
+	notification := &TaskResultNotification{
+		TaskID: "task-1",
+		Status: "completed",
+	}
+
+	err := streamer.sendNotification(sessionID, notification)
+	if err != nil {
+		t.Errorf("Expected no error, got %v", err)
+	}
+
+	// Verify notification was sent
+	select {
+	case notifJSON := <-notifChan:
+		if !strings.Contains(notifJSON, "notifications/tasks/result") {
+			t.Errorf("Expected notification to contain 'notifications/tasks/result', got %s", notifJSON)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Expected to receive notification within timeout")
 	}
 }
 

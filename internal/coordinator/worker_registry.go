@@ -146,35 +146,15 @@ func (wr *WorkerRegistry) FindWorkerWithCapacity(ctx context.Context, config *pr
 	for _, worker := range wr.workers {
 		worker.mu.RLock()
 
-		// Check if worker status is initialized and healthy (if status exists)
-		if worker.Status != nil {
-			if worker.Status.State != protov1.WorkerStatus_STATE_IDLE &&
-				worker.Status.State != protov1.WorkerStatus_STATE_BUSY {
-				worker.mu.RUnlock()
-				continue
-			}
-		}
-
-		// Check if heartbeat is recent (within 2x interval)
-		if time.Since(worker.LastHeartbeat) > worker.HeartbeatInterval*2 {
+		if !wr.isWorkerHealthy(worker) {
 			worker.mu.RUnlock()
 			continue
 		}
 
-		// Check capacity - use runtime Capacity if available, otherwise fall back to Capabilities
-		var availableSessions int32
-		if worker.Capacity != nil {
-			availableSessions = worker.Capacity.AvailableSessions
-		} else if worker.Capabilities != nil {
-			// Worker just registered, hasn't sent heartbeat yet - use max capacity
-			availableSessions = worker.Capabilities.MaxSessions
-		}
-
-		if availableSessions > 0 {
-			if availableSessions > maxAvailable {
-				maxAvailable = availableSessions
-				bestWorker = worker
-			}
+		availableSessions := wr.getAvailableSessionCount(worker)
+		if availableSessions > maxAvailable {
+			maxAvailable = availableSessions
+			bestWorker = worker
 		}
 
 		worker.mu.RUnlock()
@@ -185,6 +165,37 @@ func (wr *WorkerRegistry) FindWorkerWithCapacity(ctx context.Context, config *pr
 	}
 
 	return bestWorker, nil
+}
+
+// isWorkerHealthy checks if a worker is in a healthy state and has recent heartbeat
+func (wr *WorkerRegistry) isWorkerHealthy(worker *RegisteredWorker) bool {
+	// Check if worker status is initialized and healthy (if status exists)
+	if worker.Status != nil {
+		if worker.Status.State != protov1.WorkerStatus_STATE_IDLE &&
+			worker.Status.State != protov1.WorkerStatus_STATE_BUSY {
+			return false
+		}
+	}
+
+	// Check if heartbeat is recent (within 2x interval)
+	if time.Since(worker.LastHeartbeat) > worker.HeartbeatInterval*2 {
+		return false
+	}
+
+	return true
+}
+
+// getAvailableSessionCount returns the number of available sessions for a worker
+func (wr *WorkerRegistry) getAvailableSessionCount(worker *RegisteredWorker) int32 {
+	// Use runtime Capacity if available, otherwise fall back to Capabilities
+	if worker.Capacity != nil {
+		return worker.Capacity.AvailableSessions
+	}
+	if worker.Capabilities != nil {
+		// Worker just registered, hasn't sent heartbeat yet - use max capacity
+		return worker.Capabilities.MaxSessions
+	}
+	return 0
 }
 
 // DeregisterWorker removes a worker from the registry

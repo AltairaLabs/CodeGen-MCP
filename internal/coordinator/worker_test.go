@@ -5,6 +5,8 @@ import (
 	"log/slog"
 	"os"
 	"testing"
+
+	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 )
 
 func TestMockWorkerClient_ExecuteTask_Echo(t *testing.T) {
@@ -127,4 +129,83 @@ func TestAuditLogger_LogToolResult(t *testing.T) {
 		ToolName:  "echo",
 		ErrorMsg:  "test error",
 	})
+}
+
+func TestGetToolNameFromTypedRequest(t *testing.T) {
+	tests := []struct {
+		name     string
+		request  *protov1.ToolRequest
+		expected string
+	}{
+		{
+			name: "Echo request",
+			request: &protov1.ToolRequest{
+				Request: &protov1.ToolRequest_Echo{
+					Echo: &protov1.EchoRequest{Message: "test"},
+				},
+			},
+			expected: "echo",
+		},
+		{
+			name: "FsRead request",
+			request: &protov1.ToolRequest{
+				Request: &protov1.ToolRequest_FsRead{
+					FsRead: &protov1.FsReadRequest{Path: "test.txt"},
+				},
+			},
+			expected: "fs.read",
+		},
+		{
+			name: "FsWrite request",
+			request: &protov1.ToolRequest{
+				Request: &protov1.ToolRequest_FsWrite{
+					FsWrite: &protov1.FsWriteRequest{Path: "test.txt", Contents: "data"},
+				},
+			},
+			expected: "fs.write",
+		},
+		{
+			name: "FsList request",
+			request: &protov1.ToolRequest{
+				Request: &protov1.ToolRequest_FsList{
+					FsList: &protov1.FsListRequest{Path: "."},
+				},
+			},
+			expected: "fs.list",
+		},
+		{
+			name: "RunPython request",
+			request: &protov1.ToolRequest{
+				Request: &protov1.ToolRequest_RunPython{
+					RunPython: &protov1.RunPythonRequest{
+						Source: &protov1.RunPythonRequest_Code{Code: "print('test')"},
+					},
+				},
+			},
+			expected: "run.python",
+		},
+		{
+			name: "PkgInstall request",
+			request: &protov1.ToolRequest{
+				Request: &protov1.ToolRequest_PkgInstall{
+					PkgInstall: &protov1.PkgInstallRequest{Packages: []string{"requests"}},
+				},
+			},
+			expected: "pkg.install",
+		},
+		{
+			name:     "Unknown/nil request",
+			request:  &protov1.ToolRequest{Request: nil},
+			expected: "unknown",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := getToolNameFromTypedRequest(tt.request)
+			if result != tt.expected {
+				t.Errorf("getToolNameFromTypedRequest() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
 }
