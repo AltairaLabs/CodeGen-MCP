@@ -71,7 +71,7 @@ func (r *RealWorkerClient) waitForTaskResponse(
 // sendTypedTaskToWorker sends a typed task assignment to a worker over the bidirectional gRPC stream.
 // This function involves direct gRPC stream manipulation and error handling that is difficult to
 // test without a real gRPC connection, making it untestable in isolation.
-func (r *RealWorkerClient) sendTypedTaskToWorker(params taskSendParams) (chan *protov1.TaskStreamResponse, error) {
+func (r *RealWorkerClient) sendTypedTaskToWorker(params *taskSendParams) (chan *protov1.TaskStreamResponse, error) {
 	params.worker.mu.Lock()
 	defer params.worker.mu.Unlock()
 
@@ -193,7 +193,7 @@ func (r *RealWorkerClient) ExecuteTypedTask(
 	toolName := getToolNameFromTypedRequest(request)
 	startTime := time.Now()
 
-	responseChan, err := r.sendTypedTaskToWorker(taskSendParams{
+	responseChan, err := r.sendTypedTaskToWorker(&taskSendParams{
 		ctx:         taskCtx,
 		worker:      worker,
 		session:     session,

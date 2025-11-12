@@ -12,6 +12,7 @@ import (
 const (
 	progressStarting  = 10
 	progressCompleted = 100
+	unknownToolName   = "unknown"
 )
 
 // MetadataRequirement defines a required metadata field for a tool
@@ -53,7 +54,7 @@ type TaskExecutor struct {
 // getToolNameFromTypedRequest extracts the tool name from a typed request
 func getToolNameFromTypedRequest(req *protov1.ToolRequest) string {
 	if req == nil {
-		return "unknown"
+		return unknownToolName
 	}
 	switch req.Request.(type) {
 	case *protov1.ToolRequest_Echo:
@@ -69,7 +70,7 @@ func getToolNameFromTypedRequest(req *protov1.ToolRequest) string {
 	case *protov1.ToolRequest_PkgInstall:
 		return "pkg.install"
 	default:
-		return "unknown"
+		return unknownToolName
 	}
 }
 

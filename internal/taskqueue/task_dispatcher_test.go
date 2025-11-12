@@ -77,7 +77,7 @@ func TestNewTaskDispatcher_WithPolicy(t *testing.T) {
 	if dispatcher == nil {
 		t.Fatal("Expected non-nil dispatcher")
 	}
-	if dispatcher.storage != stor {
+	if dispatcher.storageImpl != stor {
 		t.Error("Expected storage to be set")
 	}
 	if dispatcher.workerClient != workerClient {

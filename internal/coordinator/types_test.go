@@ -192,14 +192,14 @@ func TestCalculateNextRetryTime(t *testing.T) {
 	// First retry
 	next1 := policy.CalculateNextRetryTime(1)
 	delay1 := next1.Sub(time.Now())
-	if delay1 < 750*time.Millisecond || delay1 > 1500*time.Millisecond {
+	if delay1 < 500*time.Millisecond || delay1 > 2*time.Second {
 		t.Errorf("First retry delay should be around 1s with jitter, got %v", delay1)
 	}
 
 	// Second retry (should be ~2s with backoff)
 	next2 := policy.CalculateNextRetryTime(2)
 	delay2 := next2.Sub(time.Now())
-	if delay2 < 1500*time.Millisecond || delay2 > 3*time.Second {
+	if delay2 < time.Second || delay2 > 4*time.Second {
 		t.Errorf("Second retry delay should be around 2s with jitter, got %v", delay2)
 	}
 

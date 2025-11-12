@@ -18,22 +18,22 @@ const (
 
 // Scheduler works directly with storage types - clean and simple
 type Scheduler struct {
-	storage storage.TaskQueueStorage
-	logger  *slog.Logger
+	storageImpl storage.TaskQueueStorage
+	logger      *slog.Logger
 }
 
 // NewScheduler creates a new retry scheduler that works directly with storage types
 // No interfaces, adapters, or type conversions needed - much cleaner architecture
-func NewScheduler(storage storage.TaskQueueStorage, logger *slog.Logger) *Scheduler {
+func NewScheduler(storageImpl storage.TaskQueueStorage, logger *slog.Logger) *Scheduler {
 	return &Scheduler{
-		storage: storage,
-		logger:  logger,
+		storageImpl: storageImpl,
+		logger:      logger,
 	}
 }
 
 // NewDirectScheduler is an alias for NewScheduler for backward compatibility
-func NewDirectScheduler(storage storage.TaskQueueStorage, logger *slog.Logger) *Scheduler {
-	return NewScheduler(storage, logger)
+func NewDirectScheduler(storageImpl storage.TaskQueueStorage, logger *slog.Logger) *Scheduler {
+	return NewScheduler(storageImpl, logger)
 }
 
 // Start begins the retry scheduler background goroutine
@@ -63,7 +63,7 @@ func (rs *Scheduler) Start(ctx context.Context) {
 // processRetries checks for tasks ready to retry and requeues them - clean implementation
 func (rs *Scheduler) processRetries(ctx context.Context) error {
 	// Direct call to storage - no interface conversion needed
-	tasks, err := rs.storage.GetTasksReadyForRetry(ctx, BatchSize)
+	tasks, err := rs.storageImpl.GetTasksReadyForRetry(ctx, BatchSize)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (rs *Scheduler) processRetries(ctx context.Context) error {
 
 	for _, task := range tasks {
 		// Direct method calls - no interface overhead
-		if err := rs.storage.RequeueTaskForRetry(ctx, task.ID); err != nil {
+		if err := rs.storageImpl.RequeueTaskForRetry(ctx, task.ID); err != nil {
 			rs.logger.Error("Failed to requeue task for retry",
 				"task_id", task.ID,
 				"error", err,

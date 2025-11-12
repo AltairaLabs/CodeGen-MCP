@@ -16,6 +16,7 @@ import (
 // TaskQueueInterface defines the interface for task queue operations
 type TaskQueueInterface interface {
 	// EnqueueTask adds a new task to the queue for a session
+	//
 	// Deprecated: Use EnqueueTypedTask for type-safe requests
 	EnqueueTask(ctx context.Context, sessionID, toolName string, args TaskArgs) (string, error)
 
@@ -71,17 +72,17 @@ func DefaultTaskQueueConfig() TaskQueueConfig {
 
 // NewTaskQueue creates a new task queue manager
 func NewTaskQueue(
-	storage storage.TaskQueueStorage,
+	storageImpl storage.TaskQueueStorage,
 	sessionMgr SessionManager,
 	workerClient WorkerClient,
 	dispatcher *TaskDispatcher,
 	logger *slog.Logger,
-	config TaskQueueConfig,
+	cfg TaskQueueConfig,
 ) *TaskQueue {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	return &TaskQueue{
-		storage:          storage,
+		storage:          storageImpl,
 		sessionManager:   sessionMgr,
 		workerClient:     workerClient,
 		dispatcher:       dispatcher,
@@ -89,8 +90,8 @@ func NewTaskQueue(
 		resultChannels:   make(map[string]chan *TaskResult),
 		ctx:              ctx,
 		cancel:           cancel,
-		dispatchInterval: config.DispatchInterval,
-		maxDispatchBatch: config.MaxDispatchBatch,
+		dispatchInterval: cfg.DispatchInterval,
+		maxDispatchBatch: cfg.MaxDispatchBatch,
 	}
 }
 

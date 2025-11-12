@@ -128,7 +128,7 @@ func (r *RealWorkerClient) ExecuteTask(
 	defer cancel()
 
 	startTime := time.Now()
-	responseChan, err := r.sendTaskToWorker(taskSendParams{
+	responseChan, err := r.sendTaskToWorker(&taskSendParams{
 		ctx:         taskCtx,
 		worker:      worker,
 		session:     session,
@@ -206,7 +206,7 @@ type taskSendParams struct {
 	request *protov1.ToolRequest
 }
 
-func (r *RealWorkerClient) sendTaskToWorker(params taskSendParams) (chan *protov1.TaskStreamResponse, error) {
+func (r *RealWorkerClient) sendTaskToWorker(params *taskSendParams) (chan *protov1.TaskStreamResponse, error) {
 	params.worker.mu.Lock()
 	defer params.worker.mu.Unlock()
 

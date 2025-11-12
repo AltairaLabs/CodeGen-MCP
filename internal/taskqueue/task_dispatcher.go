@@ -10,20 +10,20 @@ import (
 // TaskDispatcher handles task dispatch with retry logic
 // This will be used by the task queue system (Phase 5) when dispatching tasks
 type TaskDispatcher struct {
-	storage      storage.TaskQueueStorage
+	storageImpl  storage.TaskQueueStorage
 	workerClient WorkerClient
 	retryPolicy  *RetryPolicy
 }
 
 // NewTaskDispatcher creates a new task dispatcher with retry support
-func NewTaskDispatcher(storage storage.TaskQueueStorage, workerClient WorkerClient, policy *RetryPolicy) *TaskDispatcher {
+func NewTaskDispatcher(storageImpl storage.TaskQueueStorage, workerClient WorkerClient, policy *RetryPolicy) *TaskDispatcher {
 	if policy == nil {
 		defaultPolicy := DefaultRetryPolicy()
 		policy = &defaultPolicy
 	}
 
 	return &TaskDispatcher{
-		storage:      storage,
+		storageImpl:  storageImpl,
 		workerClient: workerClient,
 		retryPolicy:  policy,
 	}
@@ -53,7 +53,7 @@ func (td *TaskDispatcher) HandleTaskFailure(
 
 	// Mark task for retry
 	errorMsg := fmt.Sprintf("Task failed: %v", taskErr)
-	if err := td.storage.UpdateTaskForRetry(ctx, task.ID, nextRetryAt, errorMsg); err != nil {
+	if err := td.storageImpl.UpdateTaskForRetry(ctx, task.ID, nextRetryAt, errorMsg); err != nil {
 		return false, fmt.Errorf("failed to update task for retry: %w", err)
 	}
 

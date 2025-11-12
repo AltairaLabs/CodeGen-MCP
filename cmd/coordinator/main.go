@@ -189,7 +189,7 @@ type serverConfig struct {
 	httpPort       string
 }
 
-func startBackgroundServices(cfg serverConfig) {
+func startBackgroundServices(cfg *serverConfig) {
 	cfg.taskQueue.Start()
 	cfg.logger.Info("Task queue background workers started")
 
@@ -199,7 +199,7 @@ func startBackgroundServices(cfg serverConfig) {
 	cfg.coordServer.StartCleanupLoop(cfg.ctx, workerCleanupInterval)
 }
 
-func startGRPCServer(cfg serverConfig) {
+func startGRPCServer(cfg *serverConfig) {
 	go func() {
 		cfg.logger.Info("Starting gRPC server for workers", "port", cfg.grpcPort)
 		listenConfig := net.ListenConfig{}
@@ -216,7 +216,7 @@ func startGRPCServer(cfg serverConfig) {
 	}()
 }
 
-func startMCPServer(cfg serverConfig) {
+func startMCPServer(cfg *serverConfig) {
 	go func() {
 		if *httpMode {
 			cfg.logger.Info("Starting MCP server with HTTP/SSE transport", "port", cfg.httpPort)
@@ -234,7 +234,7 @@ func startMCPServer(cfg serverConfig) {
 	}()
 }
 
-func startSessionCleanup(cfg serverConfig) {
+func startSessionCleanup(cfg *serverConfig) {
 	go func() {
 		ticker := time.NewTicker(cleanupInterval)
 		defer ticker.Stop()
@@ -281,7 +281,7 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	startBackgroundServices(serverConfig{
+	startBackgroundServices(&serverConfig{
 		ctx:            ctx,
 		cancel:         cancel,
 		logger:         logger,
