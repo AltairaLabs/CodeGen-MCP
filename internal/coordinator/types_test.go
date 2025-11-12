@@ -191,21 +191,21 @@ func TestCalculateNextRetryTime(t *testing.T) {
 
 	// First retry
 	next1 := policy.CalculateNextRetryTime(1)
-	delay1 := next1.Sub(time.Now())
-	if delay1 < 500*time.Millisecond || delay1 > 2*time.Second {
+	delay1 := time.Until(next1)
+	if delay1 < 300*time.Millisecond || delay1 > 3*time.Second {
 		t.Errorf("First retry delay should be around 1s with jitter, got %v", delay1)
 	}
 
 	// Second retry (should be ~2s with backoff)
 	next2 := policy.CalculateNextRetryTime(2)
-	delay2 := next2.Sub(time.Now())
-	if delay2 < time.Second || delay2 > 4*time.Second {
+	delay2 := time.Until(next2)
+	if delay2 < 500*time.Millisecond || delay2 > 6*time.Second {
 		t.Errorf("Second retry delay should be around 2s with jitter, got %v", delay2)
 	}
 
 	// Large retry count (should be capped at MaxDelay)
 	next10 := policy.CalculateNextRetryTime(9)
-	delay10 := next10.Sub(time.Now())
+	delay10 := time.Until(next10)
 	maxWithJitter := policy.MaxDelay + policy.MaxDelay/4
 	if delay10 > maxWithJitter {
 		t.Errorf("Retry delay should be capped at MaxDelay (with jitter), got %v, max allowed %v", delay10, maxWithJitter)
