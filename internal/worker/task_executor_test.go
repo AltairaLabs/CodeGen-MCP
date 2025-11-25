@@ -371,12 +371,12 @@ func TestTaskExecutorArtifactGet(t *testing.T) {
 
 	stream := &mockTaskStream{}
 	_ = executor.Execute(context.Background(), req, stream)
-	
+
 	// Should get at least one response (error response)
 	if len(stream.responses) == 0 {
 		t.Fatal("Expected at least one response")
 	}
-	
+
 	// Verify we got an error response for non-existent artifact
 	lastResp := stream.responses[len(stream.responses)-1]
 	if lastResp.GetError() == nil {
