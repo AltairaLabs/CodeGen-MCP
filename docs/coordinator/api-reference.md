@@ -10,6 +10,7 @@ Complete reference for the Coordinator's internal APIs, types, and interfaces.
 ## Table of Contents
 
 - [MCP Server](#mcp-server)
+- [MCP Tools](#mcp-tools)
 - [Session Manager](#session-manager)
 - [Worker Client](#worker-client)
 - [Worker Lifecycle](#worker-lifecycle)
@@ -68,6 +69,217 @@ func (ms *MCPServer) Serve() error
 ```go
 if err := server.Serve(); err != nil {
     log.Fatal("Server failed:", err)
+}
+```
+
+## MCP Tools
+
+The Coordinator exposes the following MCP tools to clients.
+
+### File System Tools
+
+#### `fs.read`
+
+Read a file from the session workspace.
+
+**Parameters:**
+- `path` (string, required) - Relative path to file within workspace
+
+**Returns:** File contents as text
+
+**Example:**
+```json
+{
+  "tool": "fs.read",
+  "arguments": {
+    "path": "src/main.py"
+  }
+}
+```
+
+#### `fs.write`
+
+Write contents to a file in the session workspace.
+
+**Parameters:**
+- `path` (string, required) - Relative path to file within workspace
+- `contents` (string, required) - File contents to write
+
+**Returns:** Success confirmation with path
+
+**Example:**
+```json
+{
+  "tool": "fs.write",
+  "arguments": {
+    "path": "hello.py",
+    "contents": "print('Hello, World!')"
+  }
+}
+```
+
+#### `fs.list`
+
+List files and directories in the workspace.
+
+**Parameters:**
+- `path` (string, optional) - Relative path to list (default: workspace root)
+
+**Returns:** Newline-separated list of files and directories
+
+**Example:**
+```json
+{
+  "tool": "fs.list",
+  "arguments": {
+    "path": "src"
+  }
+}
+```
+
+### Python Execution Tools
+
+#### `run.python`
+
+Execute Python code or a Python file in the session's isolated virtual environment.
+
+**Parameters:**
+- `code` (string) - Python code to execute directly
+- `file` (string) - Path to Python file to execute
+
+**Note:** Exactly one of `code` or `file` must be provided.
+
+**Returns:** Standard output from Python execution
+
+**Example (code):**
+```json
+{
+  "tool": "run.python",
+  "arguments": {
+    "code": "print(2 + 2)"
+  }
+}
+```
+
+**Example (file):**
+```json
+{
+  "tool": "run.python",
+  "arguments": {
+    "file": "hello.py"
+  }
+}
+```
+
+#### `pkg.install`
+
+Install Python packages in the session's virtual environment.
+
+**Parameters:**
+- `packages` (string, required) - Space-separated package names or requirements
+
+**Returns:** Installation output from pip
+
+**Example:**
+```json
+{
+  "tool": "pkg.install",
+  "arguments": {
+    "packages": "requests flask pandas"
+  }
+}
+```
+
+### Artifact Management Tools
+
+#### `artifact.get`
+
+Retrieve a generated artifact (file, package, build output) from the session.
+
+**Parameters:**
+- `artifact_id` (string, required) - Artifact identifier (format: `sessionID-timestamp-filename`)
+
+**Returns:** Artifact data with metadata (artifact_id, size_bytes, content_type)
+
+**Example:**
+```json
+{
+  "tool": "artifact.get",
+  "arguments": {
+    "artifact_id": "session-1732550000-1732550123-hello-package.zip"
+  }
+}
+```
+
+**Notes:**
+- Artifacts are scoped to sessions - only the owning session can retrieve an artifact
+- Artifact IDs are generated when files are created in the `artifacts/` subdirectory
+- Currently uses local filesystem storage (file:// URLs)
+- Production deployments can upgrade to S3/MinIO presigned URLs
+
+**Security:**
+- Session validation prevents cross-session artifact access
+- Artifact IDs include session ID for ownership verification
+- All artifact operations are audit logged
+
+### Task Management Tools
+
+#### `task.get_result`
+
+Get the result of a previously queued task.
+
+**Parameters:**
+- `task_id` (string, required) - Task identifier from async operation
+
+**Returns:** Task result or status
+
+**Example:**
+```json
+{
+  "tool": "task.get_result",
+  "arguments": {
+    "task_id": "task-abc123"
+  }
+}
+```
+
+#### `task.get_status`
+
+Get the current status of a task.
+
+**Parameters:**
+- `task_id` (string, required) - Task identifier
+
+**Returns:** Task status (queued, running, completed, failed)
+
+**Example:**
+```json
+{
+  "tool": "task.get_status",
+  "arguments": {
+    "task_id": "task-abc123"
+  }
+}
+```
+
+### Utility Tools
+
+#### `echo`
+
+Echo back a message (test/debug tool).
+
+**Parameters:**
+- `message` (string, required) - Message to echo
+
+**Returns:** The input message
+
+**Example:**
+```json
+{
+  "tool": "echo",
+  "arguments": {
+    "message": "Hello, MCP!"
+  }
 }
 ```
 

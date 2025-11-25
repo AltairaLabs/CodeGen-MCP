@@ -370,3 +370,69 @@ func (te *TaskExecutor) handlePkgInstallTyped(ctx context.Context, session *Work
 		TypedResponse: toolResponse,
 	}, nil
 }
+
+// handleArtifactGetTyped handles the artifact.get tool with typed request/response
+//
+//nolint:lll,unparam // Protobuf types create long signatures; ctx required for interface consistency
+func (te *TaskExecutor) handleArtifactGetTyped(ctx context.Context, session *WorkerSession, req *protov1.ArtifactGetRequest) (*protov1.TaskResult, error) {
+	// Extract artifact ID from request
+	artifactID := req.ArtifactId
+
+	slog.Debug("artifact.get operation",
+		"session_id", session.SessionID,
+		"artifact_id", artifactID)
+
+	// Check if artifact exists in session
+	found := false
+	for _, aid := range session.ArtifactIDs {
+		if aid == artifactID {
+			found = true
+			break
+		}
+	}
+	if !found {
+		return &protov1.TaskResult{
+			Status: protov1.TaskResult_STATUS_FAILURE,
+		}, fmt.Errorf("artifact not found in session: %s", artifactID)
+	}
+
+	// Extract filename from artifact ID (format: sessionID-timestamp-filename)
+	filename := extractFilenameFromArtifactID(artifactID)
+	if filename == "" {
+		return &protov1.TaskResult{
+			Status: protov1.TaskResult_STATUS_FAILURE,
+		}, fmt.Errorf("invalid artifact ID format: %s", artifactID)
+	}
+
+	// Construct path to artifact in workspace
+	// Artifacts are stored in the "artifacts" subdirectory of the workspace
+	artifactPath := filepath.Join(session.WorkspacePath, "artifacts", filename)
+
+	// Read artifact file
+	data, err := os.ReadFile(artifactPath)
+	if err != nil {
+		return &protov1.TaskResult{
+			Status: protov1.TaskResult_STATUS_FAILURE,
+		}, fmt.Errorf("failed to read artifact: %w", err)
+	}
+
+	// Create typed response
+	response := &protov1.ArtifactGetResponse{
+		Data:        data,
+		ArtifactId:  artifactID,
+		SizeBytes:   int64(len(data)),
+		ContentType: "application/octet-stream", // Generic binary type
+		Metadata:    req.Metadata,
+	}
+
+	toolResponse := &protov1.ToolResponse{
+		Response: &protov1.ToolResponse_ArtifactGet{
+			ArtifactGet: response,
+		},
+	}
+
+	return &protov1.TaskResult{
+		Status:        protov1.TaskResult_STATUS_SUCCESS,
+		TypedResponse: toolResponse,
+	}, nil
+}

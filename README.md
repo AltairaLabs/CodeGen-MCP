@@ -155,6 +155,7 @@ For detailed documentation, see:
 - **[docs/](./docs/)** - Complete documentation
 - **[docs/coordinator/](./docs/coordinator/)** - Coordinator documentation
 - **[docs/worker/](./docs/worker/)** - Worker documentation
+- **[docs/local-backlog/e2e-test-proposal.md](./docs/local-backlog/e2e-test-proposal.md)** - E2E testing implementation
 
 ---
 

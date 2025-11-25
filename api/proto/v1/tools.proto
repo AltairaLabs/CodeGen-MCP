@@ -124,6 +124,23 @@ message PackageInfo {
 }
 
 // ============================================================================
+// Artifact Tool - Retrieve generated artifacts
+// ============================================================================
+
+message ArtifactGetRequest {
+  string artifact_id = 1;   // Artifact identifier to retrieve
+  map<string, string> metadata = 100;
+}
+
+message ArtifactGetResponse {
+  bytes data = 1;           // Artifact binary data
+  string artifact_id = 2;   // Artifact identifier
+  int64 size_bytes = 3;     // Size of artifact
+  string content_type = 4;  // MIME type (e.g., "application/zip")
+  map<string, string> metadata = 100;
+}
+
+// ============================================================================
 // Tool Request/Response Unions
 // Used in TaskAssignment and TaskStreamResult
 // ============================================================================
@@ -136,6 +153,7 @@ message ToolRequest {
     FsListRequest fs_list = 4;
     RunPythonRequest run_python = 5;
     PkgInstallRequest pkg_install = 6;
+    ArtifactGetRequest artifact_get = 7;
   }
 }
 
@@ -147,5 +165,6 @@ message ToolResponse {
     FsListResponse fs_list = 4;
     RunPythonResponse run_python = 5;
     PkgInstallResponse pkg_install = 6;
+    ArtifactGetResponse artifact_get = 7;
   }
 }

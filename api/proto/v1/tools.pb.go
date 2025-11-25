@@ -987,6 +987,134 @@ func (x *PackageInfo) GetLocation() string {
 	return ""
 }
 
+type ArtifactGetRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ArtifactId    string                 `protobuf:"bytes,1,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"` // Artifact identifier to retrieve
+	Metadata      map[string]string      `protobuf:"bytes,100,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ArtifactGetRequest) Reset() {
+	*x = ArtifactGetRequest{}
+	mi := &file_api_proto_v1_tools_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArtifactGetRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArtifactGetRequest) ProtoMessage() {}
+
+func (x *ArtifactGetRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_tools_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArtifactGetRequest.ProtoReflect.Descriptor instead.
+func (*ArtifactGetRequest) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_tools_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *ArtifactGetRequest) GetArtifactId() string {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return ""
+}
+
+func (x *ArtifactGetRequest) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
+type ArtifactGetResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Data          []byte                 `protobuf:"bytes,1,opt,name=data,proto3" json:"data,omitempty"`                                  // Artifact binary data
+	ArtifactId    string                 `protobuf:"bytes,2,opt,name=artifact_id,json=artifactId,proto3" json:"artifact_id,omitempty"`    // Artifact identifier
+	SizeBytes     int64                  `protobuf:"varint,3,opt,name=size_bytes,json=sizeBytes,proto3" json:"size_bytes,omitempty"`      // Size of artifact
+	ContentType   string                 `protobuf:"bytes,4,opt,name=content_type,json=contentType,proto3" json:"content_type,omitempty"` // MIME type (e.g., "application/zip")
+	Metadata      map[string]string      `protobuf:"bytes,100,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ArtifactGetResponse) Reset() {
+	*x = ArtifactGetResponse{}
+	mi := &file_api_proto_v1_tools_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ArtifactGetResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ArtifactGetResponse) ProtoMessage() {}
+
+func (x *ArtifactGetResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_proto_v1_tools_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ArtifactGetResponse.ProtoReflect.Descriptor instead.
+func (*ArtifactGetResponse) Descriptor() ([]byte, []int) {
+	return file_api_proto_v1_tools_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *ArtifactGetResponse) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *ArtifactGetResponse) GetArtifactId() string {
+	if x != nil {
+		return x.ArtifactId
+	}
+	return ""
+}
+
+func (x *ArtifactGetResponse) GetSizeBytes() int64 {
+	if x != nil {
+		return x.SizeBytes
+	}
+	return 0
+}
+
+func (x *ArtifactGetResponse) GetContentType() string {
+	if x != nil {
+		return x.ContentType
+	}
+	return ""
+}
+
+func (x *ArtifactGetResponse) GetMetadata() map[string]string {
+	if x != nil {
+		return x.Metadata
+	}
+	return nil
+}
+
 type ToolRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Request:
@@ -997,6 +1125,7 @@ type ToolRequest struct {
 	//	*ToolRequest_FsList
 	//	*ToolRequest_RunPython
 	//	*ToolRequest_PkgInstall
+	//	*ToolRequest_ArtifactGet
 	Request       isToolRequest_Request `protobuf_oneof:"request"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1004,7 +1133,7 @@ type ToolRequest struct {
 
 func (x *ToolRequest) Reset() {
 	*x = ToolRequest{}
-	mi := &file_api_proto_v1_tools_proto_msgTypes[14]
+	mi := &file_api_proto_v1_tools_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1016,7 +1145,7 @@ func (x *ToolRequest) String() string {
 func (*ToolRequest) ProtoMessage() {}
 
 func (x *ToolRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_tools_proto_msgTypes[14]
+	mi := &file_api_proto_v1_tools_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1029,7 +1158,7 @@ func (x *ToolRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolRequest.ProtoReflect.Descriptor instead.
 func (*ToolRequest) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_tools_proto_rawDescGZIP(), []int{14}
+	return file_api_proto_v1_tools_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ToolRequest) GetRequest() isToolRequest_Request {
@@ -1093,6 +1222,15 @@ func (x *ToolRequest) GetPkgInstall() *PkgInstallRequest {
 	return nil
 }
 
+func (x *ToolRequest) GetArtifactGet() *ArtifactGetRequest {
+	if x != nil {
+		if x, ok := x.Request.(*ToolRequest_ArtifactGet); ok {
+			return x.ArtifactGet
+		}
+	}
+	return nil
+}
+
 type isToolRequest_Request interface {
 	isToolRequest_Request()
 }
@@ -1121,6 +1259,10 @@ type ToolRequest_PkgInstall struct {
 	PkgInstall *PkgInstallRequest `protobuf:"bytes,6,opt,name=pkg_install,json=pkgInstall,proto3,oneof"`
 }
 
+type ToolRequest_ArtifactGet struct {
+	ArtifactGet *ArtifactGetRequest `protobuf:"bytes,7,opt,name=artifact_get,json=artifactGet,proto3,oneof"`
+}
+
 func (*ToolRequest_Echo) isToolRequest_Request() {}
 
 func (*ToolRequest_FsRead) isToolRequest_Request() {}
@@ -1133,6 +1275,8 @@ func (*ToolRequest_RunPython) isToolRequest_Request() {}
 
 func (*ToolRequest_PkgInstall) isToolRequest_Request() {}
 
+func (*ToolRequest_ArtifactGet) isToolRequest_Request() {}
+
 type ToolResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Response:
@@ -1143,6 +1287,7 @@ type ToolResponse struct {
 	//	*ToolResponse_FsList
 	//	*ToolResponse_RunPython
 	//	*ToolResponse_PkgInstall
+	//	*ToolResponse_ArtifactGet
 	Response      isToolResponse_Response `protobuf_oneof:"response"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1150,7 +1295,7 @@ type ToolResponse struct {
 
 func (x *ToolResponse) Reset() {
 	*x = ToolResponse{}
-	mi := &file_api_proto_v1_tools_proto_msgTypes[15]
+	mi := &file_api_proto_v1_tools_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1162,7 +1307,7 @@ func (x *ToolResponse) String() string {
 func (*ToolResponse) ProtoMessage() {}
 
 func (x *ToolResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_proto_v1_tools_proto_msgTypes[15]
+	mi := &file_api_proto_v1_tools_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1175,7 +1320,7 @@ func (x *ToolResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ToolResponse.ProtoReflect.Descriptor instead.
 func (*ToolResponse) Descriptor() ([]byte, []int) {
-	return file_api_proto_v1_tools_proto_rawDescGZIP(), []int{15}
+	return file_api_proto_v1_tools_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ToolResponse) GetResponse() isToolResponse_Response {
@@ -1239,6 +1384,15 @@ func (x *ToolResponse) GetPkgInstall() *PkgInstallResponse {
 	return nil
 }
 
+func (x *ToolResponse) GetArtifactGet() *ArtifactGetResponse {
+	if x != nil {
+		if x, ok := x.Response.(*ToolResponse_ArtifactGet); ok {
+			return x.ArtifactGet
+		}
+	}
+	return nil
+}
+
 type isToolResponse_Response interface {
 	isToolResponse_Response()
 }
@@ -1267,6 +1421,10 @@ type ToolResponse_PkgInstall struct {
 	PkgInstall *PkgInstallResponse `protobuf:"bytes,6,opt,name=pkg_install,json=pkgInstall,proto3,oneof"`
 }
 
+type ToolResponse_ArtifactGet struct {
+	ArtifactGet *ArtifactGetResponse `protobuf:"bytes,7,opt,name=artifact_get,json=artifactGet,proto3,oneof"`
+}
+
 func (*ToolResponse_Echo) isToolResponse_Response() {}
 
 func (*ToolResponse_FsRead) isToolResponse_Response() {}
@@ -1278,6 +1436,8 @@ func (*ToolResponse_FsList) isToolResponse_Response() {}
 func (*ToolResponse_RunPython) isToolResponse_Response() {}
 
 func (*ToolResponse_PkgInstall) isToolResponse_Response() {}
+
+func (*ToolResponse_ArtifactGet) isToolResponse_Response() {}
 
 var File_api_proto_v1_tools_proto protoreflect.FileDescriptor
 
@@ -1397,7 +1557,25 @@ const file_api_proto_v1_tools_proto_rawDesc = "" +
 	"\vPackageInfo\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12\x1a\n" +
-	"\blocation\x18\x03 \x01(\tR\blocation\"\xed\x02\n" +
+	"\blocation\x18\x03 \x01(\tR\blocation\"\xbc\x01\n" +
+	"\x12ArtifactGetRequest\x12\x1f\n" +
+	"\vartifact_id\x18\x01 \x01(\tR\n" +
+	"artifactId\x12H\n" +
+	"\bmetadata\x18d \x03(\v2,.codegen.v1.ArtifactGetRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x94\x02\n" +
+	"\x13ArtifactGetResponse\x12\x12\n" +
+	"\x04data\x18\x01 \x01(\fR\x04data\x12\x1f\n" +
+	"\vartifact_id\x18\x02 \x01(\tR\n" +
+	"artifactId\x12\x1d\n" +
+	"\n" +
+	"size_bytes\x18\x03 \x01(\x03R\tsizeBytes\x12!\n" +
+	"\fcontent_type\x18\x04 \x01(\tR\vcontentType\x12I\n" +
+	"\bmetadata\x18d \x03(\v2-.codegen.v1.ArtifactGetResponse.MetadataEntryR\bmetadata\x1a;\n" +
+	"\rMetadataEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb2\x03\n" +
 	"\vToolRequest\x12-\n" +
 	"\x04echo\x18\x01 \x01(\v2\x17.codegen.v1.EchoRequestH\x00R\x04echo\x124\n" +
 	"\afs_read\x18\x02 \x01(\v2\x19.codegen.v1.FsReadRequestH\x00R\x06fsRead\x127\n" +
@@ -1406,8 +1584,9 @@ const file_api_proto_v1_tools_proto_rawDesc = "" +
 	"\n" +
 	"run_python\x18\x05 \x01(\v2\x1c.codegen.v1.RunPythonRequestH\x00R\trunPython\x12@\n" +
 	"\vpkg_install\x18\x06 \x01(\v2\x1d.codegen.v1.PkgInstallRequestH\x00R\n" +
-	"pkgInstallB\t\n" +
-	"\arequest\"\xf5\x02\n" +
+	"pkgInstall\x12C\n" +
+	"\fartifact_get\x18\a \x01(\v2\x1e.codegen.v1.ArtifactGetRequestH\x00R\vartifactGetB\t\n" +
+	"\arequest\"\xbb\x03\n" +
 	"\fToolResponse\x12.\n" +
 	"\x04echo\x18\x01 \x01(\v2\x18.codegen.v1.EchoResponseH\x00R\x04echo\x125\n" +
 	"\afs_read\x18\x02 \x01(\v2\x1a.codegen.v1.FsReadResponseH\x00R\x06fsRead\x128\n" +
@@ -1416,7 +1595,8 @@ const file_api_proto_v1_tools_proto_rawDesc = "" +
 	"\n" +
 	"run_python\x18\x05 \x01(\v2\x1d.codegen.v1.RunPythonResponseH\x00R\trunPython\x12A\n" +
 	"\vpkg_install\x18\x06 \x01(\v2\x1e.codegen.v1.PkgInstallResponseH\x00R\n" +
-	"pkgInstallB\n" +
+	"pkgInstall\x12D\n" +
+	"\fartifact_get\x18\a \x01(\v2\x1f.codegen.v1.ArtifactGetResponseH\x00R\vartifactGetB\n" +
 	"\n" +
 	"\bresponseB9Z7github.com/altairalabs/codegen-mcp/api/proto/v1;protov1b\x06proto3"
 
@@ -1432,71 +1612,79 @@ func file_api_proto_v1_tools_proto_rawDescGZIP() []byte {
 	return file_api_proto_v1_tools_proto_rawDescData
 }
 
-var file_api_proto_v1_tools_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
+var file_api_proto_v1_tools_proto_msgTypes = make([]protoimpl.MessageInfo, 33)
 var file_api_proto_v1_tools_proto_goTypes = []any{
-	(*EchoRequest)(nil),        // 0: codegen.v1.EchoRequest
-	(*EchoResponse)(nil),       // 1: codegen.v1.EchoResponse
-	(*FsReadRequest)(nil),      // 2: codegen.v1.FsReadRequest
-	(*FsReadResponse)(nil),     // 3: codegen.v1.FsReadResponse
-	(*FsWriteRequest)(nil),     // 4: codegen.v1.FsWriteRequest
-	(*FsWriteResponse)(nil),    // 5: codegen.v1.FsWriteResponse
-	(*FsListRequest)(nil),      // 6: codegen.v1.FsListRequest
-	(*FsListResponse)(nil),     // 7: codegen.v1.FsListResponse
-	(*FileInfo)(nil),           // 8: codegen.v1.FileInfo
-	(*RunPythonRequest)(nil),   // 9: codegen.v1.RunPythonRequest
-	(*RunPythonResponse)(nil),  // 10: codegen.v1.RunPythonResponse
-	(*PkgInstallRequest)(nil),  // 11: codegen.v1.PkgInstallRequest
-	(*PkgInstallResponse)(nil), // 12: codegen.v1.PkgInstallResponse
-	(*PackageInfo)(nil),        // 13: codegen.v1.PackageInfo
-	(*ToolRequest)(nil),        // 14: codegen.v1.ToolRequest
-	(*ToolResponse)(nil),       // 15: codegen.v1.ToolResponse
-	nil,                        // 16: codegen.v1.EchoRequest.MetadataEntry
-	nil,                        // 17: codegen.v1.EchoResponse.MetadataEntry
-	nil,                        // 18: codegen.v1.FsReadRequest.MetadataEntry
-	nil,                        // 19: codegen.v1.FsReadResponse.MetadataEntry
-	nil,                        // 20: codegen.v1.FsWriteRequest.MetadataEntry
-	nil,                        // 21: codegen.v1.FsWriteResponse.MetadataEntry
-	nil,                        // 22: codegen.v1.FsListRequest.MetadataEntry
-	nil,                        // 23: codegen.v1.FsListResponse.MetadataEntry
-	nil,                        // 24: codegen.v1.RunPythonRequest.EnvVarsEntry
-	nil,                        // 25: codegen.v1.RunPythonRequest.MetadataEntry
-	nil,                        // 26: codegen.v1.RunPythonResponse.MetadataEntry
-	nil,                        // 27: codegen.v1.PkgInstallRequest.MetadataEntry
-	nil,                        // 28: codegen.v1.PkgInstallResponse.MetadataEntry
+	(*EchoRequest)(nil),         // 0: codegen.v1.EchoRequest
+	(*EchoResponse)(nil),        // 1: codegen.v1.EchoResponse
+	(*FsReadRequest)(nil),       // 2: codegen.v1.FsReadRequest
+	(*FsReadResponse)(nil),      // 3: codegen.v1.FsReadResponse
+	(*FsWriteRequest)(nil),      // 4: codegen.v1.FsWriteRequest
+	(*FsWriteResponse)(nil),     // 5: codegen.v1.FsWriteResponse
+	(*FsListRequest)(nil),       // 6: codegen.v1.FsListRequest
+	(*FsListResponse)(nil),      // 7: codegen.v1.FsListResponse
+	(*FileInfo)(nil),            // 8: codegen.v1.FileInfo
+	(*RunPythonRequest)(nil),    // 9: codegen.v1.RunPythonRequest
+	(*RunPythonResponse)(nil),   // 10: codegen.v1.RunPythonResponse
+	(*PkgInstallRequest)(nil),   // 11: codegen.v1.PkgInstallRequest
+	(*PkgInstallResponse)(nil),  // 12: codegen.v1.PkgInstallResponse
+	(*PackageInfo)(nil),         // 13: codegen.v1.PackageInfo
+	(*ArtifactGetRequest)(nil),  // 14: codegen.v1.ArtifactGetRequest
+	(*ArtifactGetResponse)(nil), // 15: codegen.v1.ArtifactGetResponse
+	(*ToolRequest)(nil),         // 16: codegen.v1.ToolRequest
+	(*ToolResponse)(nil),        // 17: codegen.v1.ToolResponse
+	nil,                         // 18: codegen.v1.EchoRequest.MetadataEntry
+	nil,                         // 19: codegen.v1.EchoResponse.MetadataEntry
+	nil,                         // 20: codegen.v1.FsReadRequest.MetadataEntry
+	nil,                         // 21: codegen.v1.FsReadResponse.MetadataEntry
+	nil,                         // 22: codegen.v1.FsWriteRequest.MetadataEntry
+	nil,                         // 23: codegen.v1.FsWriteResponse.MetadataEntry
+	nil,                         // 24: codegen.v1.FsListRequest.MetadataEntry
+	nil,                         // 25: codegen.v1.FsListResponse.MetadataEntry
+	nil,                         // 26: codegen.v1.RunPythonRequest.EnvVarsEntry
+	nil,                         // 27: codegen.v1.RunPythonRequest.MetadataEntry
+	nil,                         // 28: codegen.v1.RunPythonResponse.MetadataEntry
+	nil,                         // 29: codegen.v1.PkgInstallRequest.MetadataEntry
+	nil,                         // 30: codegen.v1.PkgInstallResponse.MetadataEntry
+	nil,                         // 31: codegen.v1.ArtifactGetRequest.MetadataEntry
+	nil,                         // 32: codegen.v1.ArtifactGetResponse.MetadataEntry
 }
 var file_api_proto_v1_tools_proto_depIdxs = []int32{
-	16, // 0: codegen.v1.EchoRequest.metadata:type_name -> codegen.v1.EchoRequest.MetadataEntry
-	17, // 1: codegen.v1.EchoResponse.metadata:type_name -> codegen.v1.EchoResponse.MetadataEntry
-	18, // 2: codegen.v1.FsReadRequest.metadata:type_name -> codegen.v1.FsReadRequest.MetadataEntry
-	19, // 3: codegen.v1.FsReadResponse.metadata:type_name -> codegen.v1.FsReadResponse.MetadataEntry
-	20, // 4: codegen.v1.FsWriteRequest.metadata:type_name -> codegen.v1.FsWriteRequest.MetadataEntry
-	21, // 5: codegen.v1.FsWriteResponse.metadata:type_name -> codegen.v1.FsWriteResponse.MetadataEntry
-	22, // 6: codegen.v1.FsListRequest.metadata:type_name -> codegen.v1.FsListRequest.MetadataEntry
+	18, // 0: codegen.v1.EchoRequest.metadata:type_name -> codegen.v1.EchoRequest.MetadataEntry
+	19, // 1: codegen.v1.EchoResponse.metadata:type_name -> codegen.v1.EchoResponse.MetadataEntry
+	20, // 2: codegen.v1.FsReadRequest.metadata:type_name -> codegen.v1.FsReadRequest.MetadataEntry
+	21, // 3: codegen.v1.FsReadResponse.metadata:type_name -> codegen.v1.FsReadResponse.MetadataEntry
+	22, // 4: codegen.v1.FsWriteRequest.metadata:type_name -> codegen.v1.FsWriteRequest.MetadataEntry
+	23, // 5: codegen.v1.FsWriteResponse.metadata:type_name -> codegen.v1.FsWriteResponse.MetadataEntry
+	24, // 6: codegen.v1.FsListRequest.metadata:type_name -> codegen.v1.FsListRequest.MetadataEntry
 	8,  // 7: codegen.v1.FsListResponse.files:type_name -> codegen.v1.FileInfo
-	23, // 8: codegen.v1.FsListResponse.metadata:type_name -> codegen.v1.FsListResponse.MetadataEntry
-	24, // 9: codegen.v1.RunPythonRequest.env_vars:type_name -> codegen.v1.RunPythonRequest.EnvVarsEntry
-	25, // 10: codegen.v1.RunPythonRequest.metadata:type_name -> codegen.v1.RunPythonRequest.MetadataEntry
-	26, // 11: codegen.v1.RunPythonResponse.metadata:type_name -> codegen.v1.RunPythonResponse.MetadataEntry
-	27, // 12: codegen.v1.PkgInstallRequest.metadata:type_name -> codegen.v1.PkgInstallRequest.MetadataEntry
+	25, // 8: codegen.v1.FsListResponse.metadata:type_name -> codegen.v1.FsListResponse.MetadataEntry
+	26, // 9: codegen.v1.RunPythonRequest.env_vars:type_name -> codegen.v1.RunPythonRequest.EnvVarsEntry
+	27, // 10: codegen.v1.RunPythonRequest.metadata:type_name -> codegen.v1.RunPythonRequest.MetadataEntry
+	28, // 11: codegen.v1.RunPythonResponse.metadata:type_name -> codegen.v1.RunPythonResponse.MetadataEntry
+	29, // 12: codegen.v1.PkgInstallRequest.metadata:type_name -> codegen.v1.PkgInstallRequest.MetadataEntry
 	13, // 13: codegen.v1.PkgInstallResponse.installed:type_name -> codegen.v1.PackageInfo
-	28, // 14: codegen.v1.PkgInstallResponse.metadata:type_name -> codegen.v1.PkgInstallResponse.MetadataEntry
-	0,  // 15: codegen.v1.ToolRequest.echo:type_name -> codegen.v1.EchoRequest
-	2,  // 16: codegen.v1.ToolRequest.fs_read:type_name -> codegen.v1.FsReadRequest
-	4,  // 17: codegen.v1.ToolRequest.fs_write:type_name -> codegen.v1.FsWriteRequest
-	6,  // 18: codegen.v1.ToolRequest.fs_list:type_name -> codegen.v1.FsListRequest
-	9,  // 19: codegen.v1.ToolRequest.run_python:type_name -> codegen.v1.RunPythonRequest
-	11, // 20: codegen.v1.ToolRequest.pkg_install:type_name -> codegen.v1.PkgInstallRequest
-	1,  // 21: codegen.v1.ToolResponse.echo:type_name -> codegen.v1.EchoResponse
-	3,  // 22: codegen.v1.ToolResponse.fs_read:type_name -> codegen.v1.FsReadResponse
-	5,  // 23: codegen.v1.ToolResponse.fs_write:type_name -> codegen.v1.FsWriteResponse
-	7,  // 24: codegen.v1.ToolResponse.fs_list:type_name -> codegen.v1.FsListResponse
-	10, // 25: codegen.v1.ToolResponse.run_python:type_name -> codegen.v1.RunPythonResponse
-	12, // 26: codegen.v1.ToolResponse.pkg_install:type_name -> codegen.v1.PkgInstallResponse
-	27, // [27:27] is the sub-list for method output_type
-	27, // [27:27] is the sub-list for method input_type
-	27, // [27:27] is the sub-list for extension type_name
-	27, // [27:27] is the sub-list for extension extendee
-	0,  // [0:27] is the sub-list for field type_name
+	30, // 14: codegen.v1.PkgInstallResponse.metadata:type_name -> codegen.v1.PkgInstallResponse.MetadataEntry
+	31, // 15: codegen.v1.ArtifactGetRequest.metadata:type_name -> codegen.v1.ArtifactGetRequest.MetadataEntry
+	32, // 16: codegen.v1.ArtifactGetResponse.metadata:type_name -> codegen.v1.ArtifactGetResponse.MetadataEntry
+	0,  // 17: codegen.v1.ToolRequest.echo:type_name -> codegen.v1.EchoRequest
+	2,  // 18: codegen.v1.ToolRequest.fs_read:type_name -> codegen.v1.FsReadRequest
+	4,  // 19: codegen.v1.ToolRequest.fs_write:type_name -> codegen.v1.FsWriteRequest
+	6,  // 20: codegen.v1.ToolRequest.fs_list:type_name -> codegen.v1.FsListRequest
+	9,  // 21: codegen.v1.ToolRequest.run_python:type_name -> codegen.v1.RunPythonRequest
+	11, // 22: codegen.v1.ToolRequest.pkg_install:type_name -> codegen.v1.PkgInstallRequest
+	14, // 23: codegen.v1.ToolRequest.artifact_get:type_name -> codegen.v1.ArtifactGetRequest
+	1,  // 24: codegen.v1.ToolResponse.echo:type_name -> codegen.v1.EchoResponse
+	3,  // 25: codegen.v1.ToolResponse.fs_read:type_name -> codegen.v1.FsReadResponse
+	5,  // 26: codegen.v1.ToolResponse.fs_write:type_name -> codegen.v1.FsWriteResponse
+	7,  // 27: codegen.v1.ToolResponse.fs_list:type_name -> codegen.v1.FsListResponse
+	10, // 28: codegen.v1.ToolResponse.run_python:type_name -> codegen.v1.RunPythonResponse
+	12, // 29: codegen.v1.ToolResponse.pkg_install:type_name -> codegen.v1.PkgInstallResponse
+	15, // 30: codegen.v1.ToolResponse.artifact_get:type_name -> codegen.v1.ArtifactGetResponse
+	31, // [31:31] is the sub-list for method output_type
+	31, // [31:31] is the sub-list for method input_type
+	31, // [31:31] is the sub-list for extension type_name
+	31, // [31:31] is the sub-list for extension extendee
+	0,  // [0:31] is the sub-list for field type_name
 }
 
 func init() { file_api_proto_v1_tools_proto_init() }
@@ -1508,21 +1696,23 @@ func file_api_proto_v1_tools_proto_init() {
 		(*RunPythonRequest_Code)(nil),
 		(*RunPythonRequest_File)(nil),
 	}
-	file_api_proto_v1_tools_proto_msgTypes[14].OneofWrappers = []any{
+	file_api_proto_v1_tools_proto_msgTypes[16].OneofWrappers = []any{
 		(*ToolRequest_Echo)(nil),
 		(*ToolRequest_FsRead)(nil),
 		(*ToolRequest_FsWrite)(nil),
 		(*ToolRequest_FsList)(nil),
 		(*ToolRequest_RunPython)(nil),
 		(*ToolRequest_PkgInstall)(nil),
+		(*ToolRequest_ArtifactGet)(nil),
 	}
-	file_api_proto_v1_tools_proto_msgTypes[15].OneofWrappers = []any{
+	file_api_proto_v1_tools_proto_msgTypes[17].OneofWrappers = []any{
 		(*ToolResponse_Echo)(nil),
 		(*ToolResponse_FsRead)(nil),
 		(*ToolResponse_FsWrite)(nil),
 		(*ToolResponse_FsList)(nil),
 		(*ToolResponse_RunPython)(nil),
 		(*ToolResponse_PkgInstall)(nil),
+		(*ToolResponse_ArtifactGet)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1530,7 +1720,7 @@ func file_api_proto_v1_tools_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_proto_v1_tools_proto_rawDesc), len(file_api_proto_v1_tools_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   29,
+			NumMessages:   33,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

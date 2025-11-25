@@ -69,6 +69,8 @@ func getToolNameFromTypedRequest(req *protov1.ToolRequest) string {
 		return "run.python"
 	case *protov1.ToolRequest_PkgInstall:
 		return "pkg.install"
+	case *protov1.ToolRequest_ArtifactGet:
+		return "artifact.get"
 	default:
 		return unknownToolName
 	}
@@ -351,6 +353,8 @@ func (te *TaskExecutor) executeTypedTool(ctx context.Context, session *WorkerSes
 		return te.handleRunPythonTyped(ctx, session, req.RunPython, stream)
 	case *protov1.ToolRequest_PkgInstall:
 		return te.handlePkgInstallTyped(ctx, session, req.PkgInstall, stream)
+	case *protov1.ToolRequest_ArtifactGet:
+		return te.handleArtifactGetTyped(ctx, session, req.ArtifactGet)
 	default:
 		return nil, fmt.Errorf("unknown typed tool request: %T", request.Request)
 	}

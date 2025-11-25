@@ -73,9 +73,29 @@ func (tq *TaskQueue) handleTaskSuccess(ctx context.Context, task *storage.Queued
 		"sequence", task.Sequence,
 	)
 
-	// Update task state
 	completedAt := time.Now()
 	task.CompletedAt = &completedAt
+
+	// Publish result to subscribers via SSE and cache it FIRST
+	// This must happen before updating task state to avoid race condition
+	// where clients see "completed" status but result isn't cached yet
+	if tq.resultStreamer != nil {
+		notification := &TaskResultNotification{
+			TaskID:      task.ID,
+			Status:      "completed",
+			Result:      result,
+			CompletedAt: completedAt,
+		}
+
+		if err := tq.resultStreamer.PublishResult(ctx, task.ID, notification); err != nil {
+			tq.logger.ErrorContext(ctx, "Failed to publish result",
+				"task_id", task.ID,
+				"error", err,
+			)
+		}
+	}
+
+	// Now update task state to completed (after caching result)
 	if err := tq.storage.UpdateTaskState(ctx, task.ID, storage.TaskStateCompleted); err != nil {
 		tq.logger.ErrorContext(ctx, "Failed to update task state to completed",
 			"task_id", task.ID,
@@ -91,23 +111,6 @@ func (tq *TaskQueue) handleTaskSuccess(ctx context.Context, task *storage.Queued
 			"sequence", task.Sequence,
 			"error", err,
 		)
-	}
-
-	// Publish result to subscribers via SSE
-	if tq.resultStreamer != nil {
-		notification := &TaskResultNotification{
-			TaskID:      task.ID,
-			Status:      "completed",
-			Result:      result,
-			CompletedAt: completedAt,
-		}
-
-		if err := tq.resultStreamer.PublishResult(ctx, task.ID, notification); err != nil {
-			tq.logger.ErrorContext(ctx, "Failed to publish result",
-				"task_id", task.ID,
-				"error", err,
-			)
-		}
 	}
 
 	// Send result to waiting client (for backward compatibility)
