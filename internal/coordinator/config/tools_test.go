@@ -4,7 +4,7 @@ import "testing"
 
 func TestAllTools(t *testing.T) {
 	tools := AllTools()
-	expectedCount := 8
+	expectedCount := 9
 	if len(tools) != expectedCount {
 		t.Errorf("Expected %d tools, got %d", expectedCount, len(tools))
 	}
@@ -18,6 +18,7 @@ func TestAllTools(t *testing.T) {
 		ToolPkgInstall:    true,
 		ToolGetTaskResult: true,
 		ToolGetTaskStatus: true,
+		ToolArtifactGet:   true,
 	}
 
 	for _, tool := range tools {
@@ -46,6 +47,7 @@ func TestToolConstants(t *testing.T) {
 		{"PkgInstall", ToolPkgInstall, "pkg.install"},
 		{"GetTaskResult", ToolGetTaskResult, "task.get_result"},
 		{"GetTaskStatus", ToolGetTaskStatus, "task.get_status"},
+		{"ArtifactGet", ToolArtifactGet, "artifact.get"},
 	}
 
 	for _, test := range tests {
