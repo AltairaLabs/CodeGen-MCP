@@ -5,9 +5,12 @@ import (
 	"errors"
 	"log/slog"
 	"testing"
+	"time"
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
+	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/cache"
 	"github.com/AltairaLabs/codegen-mcp/internal/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/taskqueue"
 	"github.com/AltairaLabs/codegen-mcp/internal/types"
 )
 
@@ -224,4 +227,76 @@ func TestResultStreamerAdapter_Subscribe(t *testing.T) {
 
 	// Just ensure no panic occurs
 	adapter.Subscribe("task-789", "session-3")
+}
+
+func TestTaskQueueResultStreamerAdapter(t *testing.T) {
+	// Tests for the adapter simply verify it doesn't panic and
+	// properly converts types. We use a basic ResultStreamer with no subscriptions.
+	sseMgr := NewSSESessionManager()
+	cacheInstance := cache.NewResultCache(5 * time.Minute)
+	defer cacheInstance.Close()
+	rs := NewResultStreamer(sseMgr, cacheInstance, slog.Default())
+	adapter := newTaskQueueResultStreamerAdapter(rs)
+
+	ctx := context.Background()
+	taskID := "task-123"
+
+	t.Run("Subscribe", func(t *testing.T) {
+		// Subscribe should not panic
+		adapter.Subscribe(taskID, "session-1")
+		count := rs.GetSubscriberCount(taskID)
+		if count != 1 {
+			t.Errorf("Expected 1 subscriber, got %d", count)
+		}
+	})
+
+	t.Run("PublishResultNoSubscribers", func(t *testing.T) {
+		// Publishing without subscribers should not error
+		tqNotification := &taskqueue.TaskResultNotification{
+			TaskID: "task-no-sub",
+			Status: "completed",
+			Result: &taskqueue.TaskResult{
+				Success:  true,
+				Output:   "test",
+				ExitCode: 0,
+			},
+		}
+
+		err := adapter.PublishResult(ctx, "task-no-sub", tqNotification)
+		// Should succeed even without subscribers (stored in cache)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+	})
+
+	t.Run("PublishResultWithNilFields", func(t *testing.T) {
+		// Test with nil result and progress - should not panic
+		tqNotification := &taskqueue.TaskResultNotification{
+			TaskID:   "task-nil",
+			Status:   "failed",
+			Result:   nil,
+			Progress: nil,
+			Error:    "test error",
+		}
+
+		err := adapter.PublishResult(ctx, "task-nil", tqNotification)
+		if err != nil {
+			t.Errorf("Expected no error with nil fields, got %v", err)
+		}
+	})
+
+	t.Run("PublishProgress", func(t *testing.T) {
+		// Publishing progress without subscribers should not error
+		tqProgress := &taskqueue.TaskProgress{
+			Percentage: 50,
+			Message:    "halfway",
+			Stage:      "processing",
+		}
+
+		err := adapter.PublishProgress(ctx, "task-progress", tqProgress)
+		// No subscribers = no error (progress isn't cached)
+		if err != nil {
+			t.Errorf("Expected no error, got %v", err)
+		}
+	})
 }

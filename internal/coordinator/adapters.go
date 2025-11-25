@@ -5,6 +5,7 @@ import (
 
 	protov1 "github.com/AltairaLabs/codegen-mcp/api/proto/v1"
 	"github.com/AltairaLabs/codegen-mcp/internal/storage"
+	"github.com/AltairaLabs/codegen-mcp/internal/taskqueue"
 	"github.com/AltairaLabs/codegen-mcp/internal/types"
 )
 
@@ -129,4 +130,68 @@ func newResultStreamerAdapter(rs *ResultStreamer) types.ResultStreamer {
 
 func (a *resultStreamerAdapter) Subscribe(taskID, sessionID string) {
 	a.rs.Subscribe(taskID, sessionID)
+}
+
+func (a *resultStreamerAdapter) PublishResult(ctx context.Context, taskID string, notification *TaskResultNotification) error {
+	return a.rs.PublishResult(ctx, taskID, notification)
+}
+
+func (a *resultStreamerAdapter) PublishProgress(ctx context.Context, taskID string, progress *TaskProgress) error {
+	return a.rs.PublishProgress(ctx, taskID, progress)
+}
+
+// taskQueueResultStreamerAdapter adapts coordinator ResultStreamer to taskqueue.ResultStreamer
+// This adapter includes the full interface (Subscribe, PublishResult, PublishProgress)
+// whereas resultStreamerAdapter only adapts to types.ResultStreamer (just Subscribe)
+type taskQueueResultStreamerAdapter struct {
+	rs *ResultStreamer
+}
+
+func newTaskQueueResultStreamerAdapter(rs *ResultStreamer) *taskQueueResultStreamerAdapter {
+	return &taskQueueResultStreamerAdapter{rs: rs}
+}
+
+func (a *taskQueueResultStreamerAdapter) Subscribe(taskID, sessionID string) {
+	a.rs.Subscribe(taskID, sessionID)
+}
+
+func (a *taskQueueResultStreamerAdapter) PublishResult(ctx context.Context, taskID string, notification *taskqueue.TaskResultNotification) error {
+	// Convert taskqueue notification to coordinator notification
+	var coordResult *TaskResult
+	if notification.Result != nil {
+		coordResult = &TaskResult{
+			Success:  notification.Result.Success,
+			Output:   notification.Result.Output,
+			Error:    notification.Result.Error,
+			ExitCode: notification.Result.ExitCode,
+			Duration: notification.Result.Duration,
+		}
+	}
+	var coordProgress *TaskProgress
+	if notification.Progress != nil {
+		coordProgress = &TaskProgress{
+			Percentage: notification.Progress.Percentage,
+			Message:    notification.Progress.Message,
+			Stage:      notification.Progress.Stage,
+		}
+	}
+	coordNotification := &TaskResultNotification{
+		TaskID:      notification.TaskID,
+		Status:      notification.Status,
+		Result:      coordResult,
+		Progress:    coordProgress,
+		Error:       notification.Error,
+		CompletedAt: notification.CompletedAt,
+	}
+	return a.rs.PublishResult(ctx, taskID, coordNotification)
+}
+
+func (a *taskQueueResultStreamerAdapter) PublishProgress(ctx context.Context, taskID string, progress *taskqueue.TaskProgress) error {
+	// Convert taskqueue progress to coordinator progress
+	coordProgress := &TaskProgress{
+		Percentage: progress.Percentage,
+		Message:    progress.Message,
+		Stage:      progress.Stage,
+	}
+	return a.rs.PublishProgress(ctx, taskID, coordProgress)
 }

@@ -31,27 +31,38 @@ func (h *ResultHandler) Handle(ctx context.Context, request mcp.CallToolRequest)
 
 	// Try to get result from cache
 	cachedResult, err := h.resultCache.Get(ctx, taskID)
-	if err != nil {
-		// Result not ready or not found
-		// Check task status in storage
-		task, taskErr := h.taskQueue.GetTask(ctx, taskID)
-		if taskErr != nil {
-			return mcp.NewToolResultError(fmt.Sprintf("Task not found: %s", taskID)), nil
-		}
-
-		// Return current task status
-		status := TaskResponse{
-			TaskID:    task.ID,
-			Status:    string(task.State),
-			SessionID: task.SessionID,
-			Message:   fmt.Sprintf("Task is %s", task.State),
-			CreatedAt: task.CreatedAt,
-		}
-
-		statusJSON, _ := json.Marshal(status)
-		return mcp.NewToolResultText(string(statusJSON)), nil
+	if err == nil {
+		// Result is ready, return it
+		return mcp.NewToolResultText(cachedResult.GetOutput()), nil
 	}
 
-	// Result is ready, return it
-	return mcp.NewToolResultText(cachedResult.GetOutput()), nil
+	// Result not in cache, check task status in storage
+	task, taskErr := h.taskQueue.GetTask(ctx, taskID)
+	if taskErr != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("Task not found: %s", taskID)), nil
+	}
+
+	// If task is completed or failed, the result should be in cache
+	// This handles race condition where state is updated before cache
+	if task.State == "completed" || task.State == "failed" {
+		// Retry cache lookup once for completed/failed tasks
+		cachedResult, err = h.resultCache.Get(ctx, taskID)
+		if err == nil {
+			return mcp.NewToolResultText(cachedResult.GetOutput()), nil
+		}
+		// Cache miss for completed task - return error to indicate system issue
+		return mcp.NewToolResultError(fmt.Sprintf("Task %s but result not available in cache", task.State)), nil
+	}
+
+	// Task still in progress, return current status
+	status := TaskResponse{
+		TaskID:    task.ID,
+		Status:    string(task.State),
+		SessionID: task.SessionID,
+		Message:   fmt.Sprintf("Task is %s", task.State),
+		CreatedAt: task.CreatedAt,
+	}
+
+	statusJSON, _ := json.Marshal(status)
+	return mcp.NewToolResultText(string(statusJSON)), nil
 }

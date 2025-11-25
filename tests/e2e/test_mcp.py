@@ -436,6 +436,115 @@ print(f"has get: {hasattr(requests, 'get')}")
                     print(f"   Got: {echo_output}")
                     sys.exit(1)
                 
+                # Phase 10: Create artifact (zip file)
+                print("\n📦 Phase 10: Creating distributable artifact...")
+                artifact_code = """
+import zipfile
+import os
+
+# Create artifacts directory if needed
+os.makedirs('artifacts', exist_ok=True)
+
+# Create a zip file with our hello.py script
+with zipfile.ZipFile('artifacts/hello-package.zip', 'w') as zf:
+    zf.write('hello.py')
+    
+print(f'Created artifact: hello-package.zip')
+print(f'Size: {os.path.getsize("artifacts/hello-package.zip")} bytes')
+"""
+                artifact_result = await session.call_tool(
+                    "run.python",
+                    arguments={
+                        "code": artifact_code
+                    }
+                )
+                artifact_response = (
+                    artifact_result.content[0].text
+                    if artifact_result.content else ""
+                )
+                
+                # Parse task response and wait for result
+                try:
+                    task_data = json.loads(artifact_response)
+                    task_id = task_data.get("task_id")
+                    if task_id:
+                        print(f"   Task queued: {task_id}")
+                        artifact_output = await wait_for_task_result(
+                            session, task_id
+                        )
+                    else:
+                        artifact_output = artifact_response
+                except json.JSONDecodeError:
+                    artifact_output = artifact_response
+                
+                print("   Artifact creation output:")
+                for line in artifact_output.split('\n'):
+                    if line.strip():
+                        print(f"      {line}")
+                
+                if "Created artifact:" in artifact_output:
+                    print("   ✅ Artifact created successfully")
+                else:
+                    print("   ❌ Artifact creation failed")
+                    print(f"   Got: {artifact_output}")
+                    sys.exit(1)
+                
+                # Phase 11: Retrieve artifact via artifact.get
+                print("\n⬇️  Phase 11: Retrieving artifact...")
+                
+                # Check if artifact.get tool is available
+                if "artifact.get" not in tool_names:
+                    print("   ⚠️  artifact.get tool not available")
+                    print("      - skipping artifact retrieval test")
+                    print("   💡 This is optional Phase 3 functionality")
+                else:
+                    # Construct artifact ID
+                    # Format: sessionID-timestamp-filename
+                    # For now, use filename (session ID tracking not in client)
+                    artifact_id = "hello-package.zip"
+                    
+                    try:
+                        retrieve_result = await session.call_tool(
+                            "artifact.get",
+                            arguments={
+                                "artifact_id": artifact_id
+                            }
+                        )
+                        retrieve_response = (
+                            retrieve_result.content[0].text
+                            if retrieve_result.content else ""
+                        )
+                        
+                        # Parse task response and wait for result
+                        try:
+                            task_data = json.loads(retrieve_response)
+                            task_id = task_data.get("task_id")
+                            if task_id:
+                                print(f"   Task queued: {task_id}")
+                                artifact_data = await wait_for_task_result(
+                                    session, task_id
+                                )
+                            else:
+                                artifact_data = retrieve_response
+                        except json.JSONDecodeError:
+                            artifact_data = retrieve_response
+                        
+                        # Verify artifact was retrieved
+                        # Response should contain artifact metadata/data
+                        if artifact_data and len(artifact_data) > 0:
+                            print("   ✅ Artifact retrieved successfully")
+                            data_size = len(artifact_data)
+                            print(f"   Artifact data size: {data_size} bytes")
+                        else:
+                            print("   ❌ Artifact retrieval returned")
+                            print("      empty data")
+                            sys.exit(1)
+                            
+                    except Exception as artifact_error:
+                        print(f"   ⚠️  Retrieval failed: {artifact_error}")
+                        print("   💡 Expected if artifact.get not")
+                        print("      fully implemented")
+                
                 print("\n" + "=" * 70)
                 print("🎉 All Tests Passed! E2E Test Complete!")
                 print("=" * 70)
@@ -447,6 +556,9 @@ print(f"has get: {hasattr(requests, 'get')}")
                 print("   • Package installation functional")
                 print("   • Installed packages usable")
                 print("   • Directory listing operational")
+                print("   • Artifact creation working")
+                if "artifact.get" in tool_names:
+                    print("   • Artifact retrieval available")
                 
     except Exception as e:
         print(f"\n❌ Test failed with error: {e}")

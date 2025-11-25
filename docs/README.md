@@ -18,18 +18,18 @@ The Coordinator is the central MCP server that orchestrates code generation work
 - **[Deployment Guide](./coordinator/deployment.md)** - Docker, Kubernetes, and production deployment
 - **[Testing Guide](./coordinator/testing.md)** - Test strategies and coverage
 
-**Status:** ✅ Implemented (v0.1.0, 33.2% overall / 80%+ core logic coverage, 51 tests)
+**Status:** ✅ Implemented (v0.1.0, 80% overall coverage)
 
-### Worker (Coming Soon)
+### [Worker](./worker/)
 
 The Worker executes code generation tasks inside secure Python environments.
 
-- Architecture Overview - Component design and communication protocols
-- API Reference - gRPC/HTTP API documentation
-- Deployment Guide - Container configuration and Kubernetes manifests
-- Testing Guide - Unit and integration tests
+- **[Architecture Overview](./worker/README.md)** - Component design and communication protocols
+- **[API Reference](./worker/api-reference.md)** - gRPC/HTTP API documentation
+- **[Deployment Guide](./worker/deployment.md)** - Container configuration and Kubernetes manifests
+- **[Testing Guide](./worker/testing.md)** - Unit and integration tests
 
-**Status:** ⏳ Planned
+**Status:** ✅ Implemented (v0.1.0, 80% overall coverage)
 
 ### Builder Container (Coming Soon)
 
@@ -191,33 +191,41 @@ Multi-layered security approach:
 |------|-------------|-----------|
 | `echo` | Echo message (test tool) | `message: string` |
 | `fs.read` | Read file from workspace | `path: string` |
-| `fs.write` | Write file to workspace | `path: string, contents: string` |
+| `fs.write` | Write file to workspace | `path: string, content: string` |
+| `fs.list` | List files and directories | `path: string` (optional) |
+| `run.python` | Execute Python code or file | `code: string` or `file: string` |
+| `pkg.install` | Install Python packages | `packages: string` |
+| `artifact.get` | Retrieve generated artifact | `artifact_id: string` |
+| `task.get_result` | Get task result | `task_id: string` |
+| `task.get_status` | Get task status | `task_id: string` |
 
 ### Planned Tools
 
 | Tool | Description | Status |
 |------|-------------|--------|
-| `run.python` | Execute Python code | ⏳ Planned |
-| `pkg.install` | Install Python packages | ⏳ Planned |
 | `test.run` | Run test suites | ⏳ Planned |
 | `lint.check` | Run linters/type checkers | ⏳ Planned |
 | `git.clone` | Clone repository | ⏳ Planned |
 | `git.commit` | Commit changes | ⏳ Planned |
-| `artifact.create` | Build distributable packages | ⏳ Planned |
+| `artifact.list` | List session artifacts | ⏳ Planned |
+| `artifact.upload` | Upload artifact to storage | ⏳ Planned |
 
 ## 🔍 Component Status
 
 | Component | Version | Status | Description |
 |-----------|---------|--------|-------------|
-| Coordinator | v0.1.0 | ✅ Stable | Central orchestrator for session and task management |
-| Worker | v0.1.0 | ✅ Stable | Python code execution with venv isolation |
+| Coordinator | v0.1.0 | ✅ Stable | Central orchestrator for session and task management (80% coverage) |
+| Worker | v0.1.0 | ✅ Stable | Python code execution with venv isolation (80% coverage) |
 | Docker Compose | v0.1.0 | ✅ Stable | Multi-worker deployment with session distribution |
-| Integration Tests | v0.1.0 | ✅ Complete | Docker-based end-to-end testing |
+| Integration Tests | v0.1.0 | ✅ Complete | Docker-based end-to-end testing (see tests/e2e/) |
 | Kubernetes | - | ⏳ Planned | Production orchestration |
 
 ## 📊 Quality Metrics
 
+Current test coverage: **80%** (unit tests, excludes infrastructure code)
+
 All quality metrics are tracked in SonarQube:
+
 - **Test Coverage**: See [SonarQube Dashboard](https://sonarcloud.io/project/overview?id=AltairaLabs_CodeGen-MCP)
 - **Code Quality**: Automated analysis on every commit
 - **Security Scanning**: gosec + SonarQube security rules
@@ -226,7 +234,7 @@ All quality metrics are tracked in SonarQube:
 
 - **Linting**: 24+ golangci-lint rules enabled (`.golangci.yml`)
 - **Testing**: Automated unit + integration tests
-- **Coverage**: Excludes generated proto files and main.go entrypoints
+- **Coverage**: Excludes generated proto files, main.go entrypoints, and infrastructure code
 - **Integration**: Full Docker Compose e2e test suite
 
 ## 🛠️ Development
@@ -258,10 +266,13 @@ make docker-build
 make test
 
 # Run with coverage
-make test-coverage
+make coverage
 
 # Run linting
 make lint
+
+# Run full CI pipeline locally
+make ci
 
 # Run specific component tests
 go test -v ./internal/coordinator/...

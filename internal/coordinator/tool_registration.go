@@ -123,4 +123,14 @@ func (ms *MCPServer) registerTools() {
 		),
 	)
 	add(getTaskStatusTool, toolGetTaskStatus)
+
+	// artifact.get tool - retrieve artifact
+	artifactGetTool := mcp.NewTool(config.ToolArtifactGet,
+		mcp.WithDescription("Retrieve a generated artifact by ID"),
+		mcp.WithString("artifact_id",
+			mcp.Required(),
+			mcp.Description("Artifact identifier to retrieve"),
+		),
+	)
+	add(artifactGetTool, config.ToolArtifactGet)
 }

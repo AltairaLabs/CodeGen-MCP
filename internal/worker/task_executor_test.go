@@ -346,3 +346,40 @@ func TestTaskExecutorGetStatusActiveTask(t *testing.T) {
 		t.Errorf("Expected SUCCESS status, got %v", statusResp.Status)
 	}
 }
+
+func TestTaskExecutorArtifactGet(t *testing.T) {
+	baseWorkspace := t.TempDir()
+	pool := newTestSessionPool("test-worker", 5, baseWorkspace)
+	executor := NewTaskExecutor(pool)
+
+	sessionResp, _ := pool.CreateSession(context.Background(), &protov1.CreateSessionRequest{
+		WorkspaceId: "test",
+		UserId:      testUserID,
+	})
+
+	req := &protov1.TaskRequest{
+		TaskId:    "artifact-task",
+		SessionId: sessionResp.SessionId,
+		TypedRequest: &protov1.ToolRequest{
+			Request: &protov1.ToolRequest_ArtifactGet{
+				ArtifactGet: &protov1.ArtifactGetRequest{
+					ArtifactId: "test-artifact-123",
+				},
+			},
+		},
+	}
+
+	stream := &mockTaskStream{}
+	_ = executor.Execute(context.Background(), req, stream)
+
+	// Should get at least one response (error response)
+	if len(stream.responses) == 0 {
+		t.Fatal("Expected at least one response")
+	}
+
+	// Verify we got an error response for non-existent artifact
+	lastResp := stream.responses[len(stream.responses)-1]
+	if lastResp.GetError() == nil {
+		t.Error("Expected error response for non-existent artifact")
+	}
+}

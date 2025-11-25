@@ -7,6 +7,7 @@ import (
 	"github.com/AltairaLabs/codegen-mcp/internal/coordinator/config"
 	"github.com/AltairaLabs/codegen-mcp/internal/taskqueue"
 	"github.com/AltairaLabs/codegen-mcp/internal/tools"
+	"github.com/AltairaLabs/codegen-mcp/internal/tools/handlers/artifact"
 	"github.com/AltairaLabs/codegen-mcp/internal/tools/handlers/echo"
 	"github.com/AltairaLabs/codegen-mcp/internal/tools/handlers/filesystem"
 	"github.com/AltairaLabs/codegen-mcp/internal/tools/handlers/python"
@@ -31,8 +32,8 @@ func NewMCPServer(cfg Config, sessionMgr *SessionManager, worker WorkerClient, a
 	resultStreamer := NewResultStreamer(sseManager, resultCache, logger)
 
 	// Wire up result streamer to task queue
-	// TODO: Create adapter for coordinator ResultStreamer to taskqueue.ResultStreamer interface
-	// taskQueue.SetResultStreamer(resultStreamer)
+	// This enables result caching and SSE notifications when tasks complete
+	taskQueue.SetResultStreamer(newTaskQueueResultStreamerAdapter(resultStreamer))
 
 	ms := &MCPServer{
 		server:         mcpServer,
@@ -104,6 +105,13 @@ func NewMCPServer(cfg Config, sessionMgr *SessionManager, worker WorkerClient, a
 		&taskQueueTaskAdapter{ms.taskQueue},
 	)
 
+	artifactGetHandler := artifact.NewGetHandler(
+		sessionMgrAdapter,
+		taskQueueAdapterInst,
+		auditLoggerAdapterInst,
+		resultStreamerAdapterInst,
+	)
+
 	// Create tool handler registry
 	ms.toolRegistry = tools.NewToolHandlerRegistry(map[string]tools.ToolHandlerFunc{
 		config.ToolEcho:          echoHandler.Handle,
@@ -114,6 +122,7 @@ func NewMCPServer(cfg Config, sessionMgr *SessionManager, worker WorkerClient, a
 		config.ToolPkgInstall:    pkgInstallHandler.Handle,
 		config.ToolGetTaskResult: taskResultHandler.Handle,
 		config.ToolGetTaskStatus: taskStatusHandler.Handle,
+		config.ToolArtifactGet:   artifactGetHandler.Handle,
 	})
 
 	// Register tools with MCP server

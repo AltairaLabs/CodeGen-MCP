@@ -18,6 +18,8 @@ const (
 	ToolGetTaskResult = "task.get_result"
 	// ToolGetTaskStatus is the task status retrieval tool name
 	ToolGetTaskStatus = "task.get_status"
+	// ToolArtifactGet is the artifact retrieval tool name
+	ToolArtifactGet = "artifact.get"
 )
 
 // AllTools returns a slice of all available tool names
@@ -31,5 +33,6 @@ func AllTools() []string {
 		ToolPkgInstall,
 		ToolGetTaskResult,
 		ToolGetTaskStatus,
+		ToolArtifactGet,
 	}
 }
