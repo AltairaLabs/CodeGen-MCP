@@ -623,6 +623,123 @@ func TestHandleFsReadTyped(t *testing.T) {
 	}
 }
 
+func TestHandleArtifactGetTyped(t *testing.T) {
+	tempDir := t.TempDir()
+	sessionPool := NewSessionPool("test-worker", 10, tempDir)
+	executor := NewTaskExecutor(sessionPool)
+
+	ctx := context.Background()
+	sessionID := "test-artifact-session"
+	workspacePath := filepath.Join(tempDir, sessionID)
+
+	err := sessionPool.CreateSessionWithID(ctx, sessionID, workspacePath, "user1", map[string]string{}, map[string]string{})
+	if err != nil {
+		t.Fatalf("Failed to create session: %v", err)
+	}
+	defer sessionPool.DestroySession(ctx, sessionID, false)
+
+	session, err := sessionPool.GetSession(sessionID)
+	if err != nil {
+		t.Fatalf("Failed to get session: %v", err)
+	}
+
+	// Create artifacts directory
+	artifactsDir := filepath.Join(workspacePath, "artifacts")
+	if err := os.MkdirAll(artifactsDir, 0755); err != nil {
+		t.Fatalf("Failed to create artifacts directory: %v", err)
+	}
+
+	// Create a test artifact file
+	testContent := []byte("test artifact content")
+	testFilename := "testfile.txt"
+	testPath := filepath.Join(artifactsDir, testFilename)
+	if err := os.WriteFile(testPath, testContent, 0644); err != nil {
+		t.Fatalf("Failed to write test artifact: %v", err)
+	}
+
+	// Add artifact to session with proper format: sessionID-timestamp-filename
+	artifactID := sessionID + "-12345-" + testFilename
+	session.ArtifactIDs = append(session.ArtifactIDs, artifactID)
+
+	tests := []struct {
+		name        string
+		req         *protov1.ArtifactGetRequest
+		wantErr     bool
+		errContains string
+		checkData   bool
+	}{
+		{
+			name: "successful get",
+			req: &protov1.ArtifactGetRequest{
+				ArtifactId: artifactID,
+				Metadata:   map[string]string{"test": "value"},
+			},
+			wantErr:   false,
+			checkData: true,
+		},
+		{
+			name: "artifact not in session",
+			req: &protov1.ArtifactGetRequest{
+				ArtifactId: "unknown-artifact",
+			},
+			wantErr:     true,
+			errContains: "artifact not found in session",
+		},
+		{
+			name: "invalid artifact ID format",
+			req: &protov1.ArtifactGetRequest{
+				ArtifactId: "invalid",
+			},
+			wantErr:     true,
+			errContains: "artifact not found in session",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := executor.handleArtifactGetTyped(ctx, session, tt.req)
+
+			if tt.wantErr {
+				if err == nil {
+					t.Error("Expected error but got none")
+				} else if tt.errContains != "" && !contains(err.Error(), tt.errContains) {
+					t.Errorf("Error %q does not contain %q", err.Error(), tt.errContains)
+				}
+				if result.Status != protov1.TaskResult_STATUS_FAILURE {
+					t.Errorf("Expected STATUS_FAILURE, got %v", result.Status)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if result.Status != protov1.TaskResult_STATUS_SUCCESS {
+				t.Errorf("Expected STATUS_SUCCESS, got %v", result.Status)
+			}
+
+			// Verify typed response
+			artifactResp := result.TypedResponse.GetArtifactGet()
+			if artifactResp == nil {
+				t.Fatal("Expected ArtifactGetResponse, got nil")
+			}
+
+			if tt.checkData {
+				if string(artifactResp.Data) != string(testContent) {
+					t.Errorf("Data mismatch: got %q, want %q", artifactResp.Data, testContent)
+				}
+				if artifactResp.SizeBytes != int64(len(testContent)) {
+					t.Errorf("Size mismatch: got %d, want %d", artifactResp.SizeBytes, len(testContent))
+				}
+				if artifactResp.ArtifactId != artifactID {
+					t.Errorf("ArtifactID mismatch: got %q, want %q", artifactResp.ArtifactId, artifactID)
+				}
+			}
+		})
+	}
+}
+
 func TestValidateWorkspacePath(t *testing.T) {
 	tests := []struct {
 		name    string
